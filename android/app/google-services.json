@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "270158493501",
+    "project_id": "cadastro-clientes-final",
+    "storage_bucket": "cadastro-clientes-final.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270158493501:android:b610c9a3c8b11af2c5b754",
+        "android_client_info": {
+          "package_name": "com.triplice.cadastro_clientes_final"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7Q5IFXfC5Omi1TVMVSV_3TlyeJ7EJ_9Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
