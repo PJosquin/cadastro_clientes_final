@@ -2,50 +2,84 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-class ListaClientesPage extends StatelessWidget {
-  final Query<Map<String, dynamic>>? query;
-  const ListaClientesPage({super.key, this.query});
+class ListaClientesPage extends StatefulWidget {
+  @override
+  _ListaClientesPageState createState() => _ListaClientesPageState();
+}
 
-  String _fmt(dynamic v) {
-    if (v == null) return '';
-    if (v is Timestamp) return DateFormat('dd/MM/yyyy').format(v.toDate());
-    return v.toString();
+class _ListaClientesPageState extends State<ListaClientesPage> {
+  String _formatarData(dynamic data) {
+    if (data == null) return "";
+    if (data is Timestamp) {
+      return DateFormat('dd/MM/yyyy').format(data.toDate());
+    }
+    if (data is String && data.isNotEmpty) {
+      try {
+        final parsed = DateFormat("dd/MM/yyyy").parse(data);
+        return DateFormat("dd/MM/yyyy").format(parsed);
+      } catch (_) {
+        return data;
+      }
+    }
+    return "";
+  }
+
+  String _formatarCpf(String? cpf) {
+    if (cpf == null) return "";
+    final numeros = cpf.replaceAll(RegExp(r'[^0-9]'), "");
+    if (numeros.length != 11) return cpf;
+    return "${numeros.substring(0, 3)}.${numeros.substring(3, 6)}.${numeros.substring(6, 9)}-${numeros.substring(9)}";
+  }
+
+  String _formatarTelefone(String? tel) {
+    if (tel == null) return "";
+    final numeros = tel.replaceAll(RegExp(r'[^0-9]'), "");
+    if (numeros.length == 11) {
+      return "(${numeros.substring(0, 2)}) ${numeros.substring(2, 7)}-${numeros.substring(7)}";
+    } else if (numeros.length == 10) {
+      return "(${numeros.substring(0, 2)}) ${numeros.substring(2, 6)}-${numeros.substring(6)}";
+    }
+    return tel;
   }
 
   @override
   Widget build(BuildContext context) {
-    final q = query ?? FirebaseFirestore.instance.collection('clientes');
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Lista de Clientes')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: q.snapshots(),
-        builder: (context, snap) {
-          if (snap.hasError) return const Center(child: Text('Erro ao carregar'));
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+      appBar: AppBar(title: Text("Lista de Clientes")),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('clientes').snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
-          final docs = snap.data!.docs;
-          if (docs.isEmpty) return const Center(child: Text('Nenhum cliente encontrado.'));
+          final docs = snapshot.data!.docs;
+
+          if (docs.isEmpty) {
+            return Center(child: Text("Nenhum cliente cadastrado."));
+          }
 
           return ListView.builder(
             itemCount: docs.length,
-            itemBuilder: (context, i) {
-              final c = docs[i].data();
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+
+              final cpf = _formatarCpf(data["cpf"]);
+              final telefone = _formatarTelefone(data["telefone"]);
+              final aniversario = _formatarData(data["aniversario"]);
+              final dataCadastro = _formatarData(data["dataCadastro"]);
+
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
-                  title: Text(c['nome'] ?? ''),
+                  title: Text(data["nome"] ?? ""),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('CPF: ${c['cpf'] ?? ''}'),
-                      Text('E-mail: ${c['email'] ?? ''}'),
-                      Text('Telefone: ${c['telefone'] ?? ''}'),
-                      Text('Aniversário: ${_fmt(c['aniversario'])}'),
-                      Text('Produto: ${c['produto'] ?? ''}'),
-                      Text('Marca: ${c['marca'] ?? ''}'),
-                      Text('Observações: ${c['observacoes'] ?? ''}'),
-                      Text('Cadastro: ${_fmt(c['dataCadastro'])}'),
+                      if (cpf.isNotEmpty) Text("CPF: $cpf"),
+                      if (telefone.isNotEmpty) Text("Telefone: $telefone"),
+                      if (aniversario.isNotEmpty) Text("Aniversário: $aniversario"),
+                      if (dataCadastro.isNotEmpty) Text("Cadastrado em: $dataCadastro"),
+                      if ((data["produto"] ?? "").isNotEmpty) Text("Produto: ${data["produto"]}"),
+                      if ((data["marca"] ?? "").isNotEmpty) Text("Marca: ${data["marca"]}"),
+                      if ((data["observacoes"] ?? "").isNotEmpty) Text("Obs: ${data["observacoes"]}"),
                     ],
                   ),
                 ),
