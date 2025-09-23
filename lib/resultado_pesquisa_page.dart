@@ -3,16 +3,54 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 class ResultadoPesquisaPage extends StatelessWidget {
-  final Map<String, String> filtros;
+  final String cpf;
+  final String nome;
+  final String email;
+  final String telefone;
+  final String aniversario;
+  final String produto;
+  final String marca;
+  final String observacoes;
+  final String dataCadastro;
 
-  ResultadoPesquisaPage({required this.filtros});
+  ResultadoPesquisaPage({
+    this.cpf = "",
+    this.nome = "",
+    this.email = "",
+    this.telefone = "",
+    this.aniversario = "",
+    this.produto = "",
+    this.marca = "",
+    this.observacoes = "",
+    this.dataCadastro = "",
+  });
+
+  // Função para formatar datas
+  String formatDate(dynamic date) {
+    if (date == null) return "";
+    if (date is Timestamp) {
+      return DateFormat('dd/MM/yyyy').format(date.toDate());
+    } else if (date is String && date.isNotEmpty) {
+      try {
+        return DateFormat('dd/MM/yyyy').format(DateTime.parse(date));
+      } catch (_) {
+        return date;
+      }
+    }
+    return "";
+  }
+
+  // Normaliza strings para comparação
+  String normalize(String input) {
+    return input.toLowerCase().trim();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Resultado da Pesquisa")),
       body: FutureBuilder<QuerySnapshot>(
-        future: _buildQuery().get(),
+        future: FirebaseFirestore.instance.collection('clientes').get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
@@ -21,28 +59,59 @@ class ResultadoPesquisaPage extends StatelessWidget {
             return Center(child: Text("Nenhum cliente encontrado."));
           }
 
-          final clientes = snapshot.data!.docs;
+          var clientes = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+
+            // Comparações exatas (com máscara aplicada no cadastro)
+            if (cpf.isNotEmpty && data['cpf'] != cpf) return false;
+            if (telefone.isNotEmpty && data['telefone'] != telefone) return false;
+            if (email.isNotEmpty && normalize(data['email'] ?? "") != normalize(email)) return false;
+            if (aniversario.isNotEmpty && data['aniversario'] != aniversario) return false;
+            if (marca.isNotEmpty && normalize(data['marca'] ?? "") != normalize(marca)) return false;
+            if (observacoes.isNotEmpty &&
+                !normalize(data['observacoes'] ?? "").contains(normalize(observacoes))) return false;
+
+            // Busca parcial para nome e produto
+            if (nome.isNotEmpty &&
+                !normalize(data['nome'] ?? "").contains(normalize(nome))) return false;
+
+            if (produto.isNotEmpty &&
+                !normalize(data['produto'] ?? "").contains(normalize(produto))) return false;
+
+            // Comparação de data de cadastro (se string formatada dd/MM/yyyy)
+            if (dataCadastro.isNotEmpty) {
+              String formatted = formatDate(data['dataCadastro']);
+              if (formatted != dataCadastro) return false;
+            }
+
+            return true;
+          }).toList();
+
+          if (clientes.isEmpty) {
+            return Center(child: Text("Nenhum cliente encontrado com os filtros aplicados."));
+          }
 
           return ListView.builder(
             itemCount: clientes.length,
             itemBuilder: (context, index) {
               final cliente = clientes[index].data() as Map<String, dynamic>;
               return Card(
-                margin: EdgeInsets.all(8),
+                margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
                   title: Text(cliente['nome'] ?? ''),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("CPF: ${cliente['cpf'] ?? ''}"),
-                      Text("Telefone: ${cliente['telefone'] ?? ''}"),
-                      Text("Produto: ${cliente['produto'] ?? ''}"),
-                      Text("Marca: ${cliente['marca'] ?? ''}"),
-                      Text("Observações: ${cliente['observacoes'] ?? ''}"),
+                      if (cliente['cpf'] != null) Text("CPF: ${cliente['cpf']}"),
+                      if (cliente['telefone'] != null) Text("Telefone: ${cliente['telefone']}"),
+                      if (cliente['email'] != null) Text("Email: ${cliente['email']}"),
+                      if (cliente['produto'] != null) Text("Produto: ${cliente['produto']}"),
+                      if (cliente['marca'] != null) Text("Marca: ${cliente['marca']}"),
+                      if (cliente['observacoes'] != null) Text("Obs: ${cliente['observacoes']}"),
+                      if (cliente['aniversario'] != null)
+                        Text("Aniversário: ${cliente['aniversario']}"),
                       if (cliente['dataCadastro'] != null)
-                        Text(
-                          "Cadastro: ${DateFormat('dd/MM/yyyy').format((cliente['dataCadastro'] as Timestamp).toDate())}",
-                        ),
+                        Text("Cadastro: ${formatDate(cliente['dataCadastro'])}"),
                     ],
                   ),
                 ),
@@ -52,41 +121,5 @@ class ResultadoPesquisaPage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  /// Monta a query do Firestore com base nos filtros informados
-  Query _buildQuery() {
-    Query query = FirebaseFirestore.instance.collection('clientes');
-
-    filtros.forEach((campo, valor) {
-      if (valor.isNotEmpty) {
-        switch (campo) {
-          case 'nome':
-          case 'produto':
-            query = query
-                .where(campo, isGreaterThanOrEqualTo: valor.toLowerCase())
-                .where(campo, isLessThanOrEqualTo: valor.toLowerCase() + '\uf8ff');
-            break;
-
-          case 'aniversario':
-          case 'dataCadastro':
-            try {
-              final date = DateFormat('dd/MM/yyyy').parse(valor);
-              final start = Timestamp.fromDate(DateTime(date.year, date.month, date.day));
-              final end = Timestamp.fromDate(
-                  DateTime(date.year, date.month, date.day, 23, 59, 59));
-              query = query.where(campo, isGreaterThanOrEqualTo: start, isLessThanOrEqualTo: end);
-            } catch (e) {
-              print("Erro ao converter data: $e");
-            }
-            break;
-
-          default:
-            query = query.where(campo, isEqualTo: valor);
-        }
-      }
-    });
-
-    return query;
   }
 }
