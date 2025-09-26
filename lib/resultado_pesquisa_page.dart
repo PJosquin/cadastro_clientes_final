@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ResultadoPesquisaPage extends StatefulWidget {
-  final Map<String, dynamic> filtros;
+  final Map<String, String> filtros;
 
   const ResultadoPesquisaPage({Key? key, required this.filtros})
       : super(key: key);
@@ -13,35 +14,34 @@ class ResultadoPesquisaPage extends StatefulWidget {
 }
 
 class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
-  List<Map<String, dynamic>> clientes = [];
+  late Future<List<Map<String, dynamic>>> _futureResultados;
 
   @override
   void initState() {
     super.initState();
-    _buscarClientes();
+    _futureResultados = _buscarResultados();
   }
 
-  Future<void> _buscarClientes() async {
-    Query query = FirebaseFirestore.instance.collection('clientes');
+  Future<List<Map<String, dynamic>>> _buscarResultados() async {
+    try {
+      Query query = FirebaseFirestore.instance.collection('clientes');
 
-    widget.filtros.forEach((chave, valor) {
-      if (valor != null && valor.toString().isNotEmpty) {
-        query = query.where(chave, isEqualTo: valor);
-      }
-    });
+      widget.filtros.forEach((campo, valor) {
+        if (valor.isNotEmpty) {
+          query = query.where(campo, isEqualTo: valor);
+        }
+      });
 
-    final snapshot = await query.get();
-    setState(() {
-      clientes = snapshot.docs
-          .map((doc) => {"id": doc.id, ...doc.data() as Map<String, dynamic>})
-          .toList();
-    });
+      final snapshot = await query.get();
+      return snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+    } catch (e) {
+      print(">>> ERRO Firestore no _buscarResultados: $e");
+      rethrow;
+    }
   }
 
-  Future<void> enviarWhatsApp(String telefone, String mensagem) async {
-    final numeroComDDI = telefone.startsWith("+55") ? telefone : "+55$telefone";
-    final url = Uri.parse("https://wa.me/$numeroComDDI?text=${Uri.encodeComponent(mensagem)}");
-
+  Future<void> _enviarWhatsApp(String telefone, String mensagem) async {
+    final Uri url = Uri.parse("https://wa.me/$telefone?text=${Uri.encodeComponent(mensagem)}");
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       throw Exception('Não foi possível abrir o WhatsApp');
     }
@@ -50,72 +50,60 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Resultados da Pesquisa"),
+      appBar: AppBar(title: const Text('Resultados da Pesquisa')),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _futureResultados,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            print(">>> ERRO no FutureBuilder: ${snapshot.error}");
+            return Center(
+              child: Text(
+                "Erro: ${snapshot.error}",
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
+            );
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("Nenhum cliente encontrado."));
+          }
+
+          final resultados = snapshot.data!;
+          return ListView.builder(
+            itemCount: resultados.length,
+            itemBuilder: (context, index) {
+              final cliente = resultados[index];
+
+              final telefone = cliente['telefone'] ?? '';
+              final cpf = cliente['cpf'] ?? '';
+              final dataCadastro = cliente['dataCadastro'];
+              final dataFormatada = (dataCadastro != null && dataCadastro is Timestamp)
+                  ? DateFormat('dd/MM/yyyy').format(dataCadastro.toDate())
+                  : '';
+
+              return Card(
+                margin: const EdgeInsets.all(8),
+                child: ListTile(
+                  title: Text(cliente['nome'] ?? 'Sem nome'),
+                  subtitle: Text(
+                    "CPF: $cpf\nTelefone: $telefone\nData Cadastro: $dataFormatada",
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.green),
+                    onPressed: () {
+                      if (telefone.isNotEmpty) {
+                        _enviarWhatsApp(telefone, "Olá ${cliente['nome']}, tudo bem?");
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
-      body: clientes.isEmpty
-          ? const Center(child: Text("Nenhum cliente encontrado."))
-          : ListView.builder(
-              itemCount: clientes.length,
-              itemBuilder: (context, index) {
-                final cliente = clientes[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          cliente['nome'] ?? '',
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text("Telefone: ${cliente['telefone'] ?? ''}"),
-                        Text("Email: ${cliente['email'] ?? ''}"),
-                        Text("Produto: ${cliente['produto'] ?? ''}"),
-                        if ((cliente['observacoes'] ?? '').isNotEmpty)
-                          Text(
-                            "Obs: ${cliente['observacoes']}",
-                            style: const TextStyle(fontStyle: FontStyle.italic),
-                          ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.whatsapp,
-                                  color: Colors.green),
-                              onPressed: () {
-                                enviarWhatsApp(cliente['telefone'] ?? '',
-                                    "Olá ${cliente['nome']}, tudo bem?");
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () {
-                                // TODO: implementar edição
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                // TODO: implementar exclusão
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
     );
   }
 }
