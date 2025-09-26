@@ -13,111 +13,109 @@ class ResultadoPesquisaPage extends StatefulWidget {
 }
 
 class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
-  Future<void> _enviarMensagemWhatsApp(String telefone, String mensagem) async {
-    // Remove tudo que não for número
-    String numero = telefone.replaceAll(RegExp(r'\D'), '');
+  List<Map<String, dynamic>> clientes = [];
 
-    // Adiciona o prefixo do Brasil se não estiver presente
-    if (!numero.startsWith("55")) {
-      numero = "55$numero";
-    }
-
-    final Uri url = Uri.parse(
-        "https://wa.me/$numero?text=${Uri.encodeComponent(mensagem)}");
-
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw Exception("Não foi possível abrir o WhatsApp");
-    }
+  @override
+  void initState() {
+    super.initState();
+    _buscarClientes();
   }
 
-  Future<void> _enviarParaTodos(
-      List<QueryDocumentSnapshot> documentos, String mensagem) async {
-    for (var doc in documentos) {
-      final telefone = doc['telefone'] ?? '';
-      if (telefone.isNotEmpty) {
-        await _enviarMensagemWhatsApp(telefone, mensagem);
-        await Future.delayed(const Duration(seconds: 2));
+  Future<void> _buscarClientes() async {
+    Query query = FirebaseFirestore.instance.collection('clientes');
+
+    widget.filtros.forEach((chave, valor) {
+      if (valor != null && valor.toString().isNotEmpty) {
+        query = query.where(chave, isEqualTo: valor);
       }
+    });
+
+    final snapshot = await query.get();
+    setState(() {
+      clientes = snapshot.docs
+          .map((doc) => {"id": doc.id, ...doc.data() as Map<String, dynamic>})
+          .toList();
+    });
+  }
+
+  Future<void> enviarWhatsApp(String telefone, String mensagem) async {
+    final numeroComDDI = telefone.startsWith("+55") ? telefone : "+55$telefone";
+    final url = Uri.parse("https://wa.me/$numeroComDDI?text=${Uri.encodeComponent(mensagem)}");
+
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw Exception('Não foi possível abrir o WhatsApp');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtros = widget.filtros;
-
-    Query query = FirebaseFirestore.instance.collection('clientes');
-
-    filtros.forEach((key, value) {
-      if (value != null && value.toString().isNotEmpty) {
-        query = query.where(key, isEqualTo: value);
-      }
-    });
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Resultado da Pesquisa"),
+        title: const Text("Resultados da Pesquisa"),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Nenhum cliente encontrado."));
-          }
-
-          final docs = snapshot.data!.docs;
-
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final cliente = docs[index];
-                    return Card(
-                      child: ListTile(
-                        title: Text(cliente['nome'] ?? ''),
-                        subtitle: Text(
-                          "Telefone: ${cliente['telefone'] ?? ''}\n"
-                          "E-mail: ${cliente['email'] ?? ''}\n"
-                          "Produto: ${cliente['produto'] ?? ''}\n"
-                          "Marca: ${cliente['marca'] ?? ''}",
+      body: clientes.isEmpty
+          ? const Center(child: Text("Nenhum cliente encontrado."))
+          : ListView.builder(
+              itemCount: clientes.length,
+              itemBuilder: (context, index) {
+                final cliente = clientes[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cliente['nome'] ?? '',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.green),
-                          onPressed: () {
-                            _enviarMensagemWhatsApp(
-                              cliente['telefone'] ?? '',
-                              "Olá ${cliente['nome']}, tudo bem? Esta é uma mensagem automática!",
-                            );
-                          },
+                        const SizedBox(height: 4),
+                        Text("Telefone: ${cliente['telefone'] ?? ''}"),
+                        Text("Email: ${cliente['email'] ?? ''}"),
+                        Text("Produto: ${cliente['produto'] ?? ''}"),
+                        if ((cliente['observacoes'] ?? '').isNotEmpty)
+                          Text(
+                            "Obs: ${cliente['observacoes']}",
+                            style: const TextStyle(fontStyle: FontStyle.italic),
+                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.whatsapp,
+                                  color: Colors.green),
+                              onPressed: () {
+                                enviarWhatsApp(cliente['telefone'] ?? '',
+                                    "Olá ${cliente['nome']}, tudo bem?");
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () {
+                                // TODO: implementar edição
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                // TODO: implementar exclusão
+                              },
+                            ),
+                          ],
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.send, color: Colors.white),
-                label: const Text("Enviar para todos"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-                onPressed: () {
-                  _enviarParaTodos(
-                      docs, "Olá! Esta é uma mensagem automática.");
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
-          );
-        },
-      ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
