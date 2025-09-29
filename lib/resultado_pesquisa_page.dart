@@ -13,113 +13,131 @@ class ResultadoPesquisaPage extends StatefulWidget {
 }
 
 class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
-  List<Map<String, dynamic>> resultados = [];
-  bool carregando = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _pesquisar();
-  }
-
-  Future<void> _pesquisar() async {
-    try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('clientes').get();
-
-      final docs = snapshot.docs.map((doc) => {
-            'id': doc.id,
-            ...doc.data(),
-          }).toList();
-
-      final filtros = widget.filtros;
-      final nomeFiltro = filtros['nome']?.toLowerCase() ?? "";
-
-      final filtrados = docs.where((doc) {
-        final nome = (doc['nomeLower'] ?? "").toString();
-        final cpf = (doc['cpf'] ?? "").toString();
-        final email = (doc['email'] ?? "").toString();
-        final telefone = (doc['telefone'] ?? "").toString();
-        final produto = (doc['produto'] ?? "").toString();
-        final marca = (doc['marca'] ?? "").toString();
-        final observacoes = (doc['observacoes'] ?? "").toString();
-
-        final nomeOk =
-            nomeFiltro.isEmpty || nome.contains(nomeFiltro); // parcial e insensitive
-        final cpfOk =
-            filtros['cpf']!.isEmpty || cpf.contains(filtros['cpf']!);
-        final emailOk =
-            filtros['email']!.isEmpty || email.contains(filtros['email']!);
-        final telefoneOk = filtros['telefone']!.isEmpty ||
-            telefone.contains(filtros['telefone']!);
-        final produtoOk =
-            filtros['produto']!.isEmpty || produto.contains(filtros['produto']!);
-        final marcaOk =
-            filtros['marca']!.isEmpty || marca.contains(filtros['marca']!);
-        final obsOk = filtros['observacoes']!.isEmpty ||
-            observacoes.contains(filtros['observacoes']!);
-
-        return nomeOk && cpfOk && emailOk && telefoneOk && produtoOk && marcaOk && obsOk;
-      }).toList();
-
-      setState(() {
-        resultados = filtrados;
-        carregando = false;
-      });
-    } catch (e) {
-      setState(() => carregando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erro na pesquisa: $e")),
-      );
-    }
-  }
-
-  String _formatarData(dynamic data) {
-    if (data == null || data.toString().isEmpty) return "";
-    try {
-      if (data is Timestamp) {
-        return DateFormat("dd/MM/yyyy").format(data.toDate());
-      } else if (data is String) {
-        return data;
-      }
-    } catch (_) {}
-    return data.toString();
-  }
+  final DateFormat dateFormat = DateFormat('dd/MM/yyyy');
 
   @override
   Widget build(BuildContext context) {
+    Query query = FirebaseFirestore.instance.collection('clientes');
+
+    // 🔎 Filtro por CPF
+    if (widget.filtros['cpf'] != null &&
+        widget.filtros['cpf']!.isNotEmpty) {
+      query = query.where('cpf', isEqualTo: widget.filtros['cpf']);
+    }
+
+    // 🔎 Filtro por nome (parcial, case insensitive)
+    if (widget.filtros['nome'] != null &&
+        widget.filtros['nome']!.isNotEmpty) {
+      final nomeFiltro = widget.filtros['nome']!.toLowerCase();
+      query = query.where('nomeLower', isGreaterThanOrEqualTo: nomeFiltro)
+                   .where('nomeLower', isLessThanOrEqualTo: '$nomeFiltro\uf8ff');
+    }
+
+    // 🔎 Filtro por e-mail
+    if (widget.filtros['email'] != null &&
+        widget.filtros['email']!.isNotEmpty) {
+      query = query.where('email', isEqualTo: widget.filtros['email']);
+    }
+
+    // 🔎 Filtro por telefone
+    if (widget.filtros['telefone'] != null &&
+        widget.filtros['telefone']!.isNotEmpty) {
+      query = query.where('telefone', isEqualTo: widget.filtros['telefone']);
+    }
+
+    // 🔎 Filtro por aniversário (string formatada)
+    if (widget.filtros['aniversario'] != null &&
+        widget.filtros['aniversario']!.isNotEmpty) {
+      query = query.where('aniversario', isEqualTo: widget.filtros['aniversario']);
+    }
+
+    // 🔎 Filtro por produto
+    if (widget.filtros['produto'] != null &&
+        widget.filtros['produto']!.isNotEmpty) {
+      query = query.where('produto', isEqualTo: widget.filtros['produto']);
+    }
+
+    // 🔎 Filtro por marca
+    if (widget.filtros['marca'] != null &&
+        widget.filtros['marca']!.isNotEmpty) {
+      query = query.where('marca', isEqualTo: widget.filtros['marca']);
+    }
+
+    // 🔎 Filtro por observações
+    if (widget.filtros['observacoes'] != null &&
+        widget.filtros['observacoes']!.isNotEmpty) {
+      query = query.where('observacoes', isEqualTo: widget.filtros['observacoes']);
+    }
+
+    // 🔎 Filtro por data de cadastro (Timestamp → intervalo de 1 dia)
+    if (widget.filtros['dataCadastro'] != null &&
+        widget.filtros['dataCadastro']!.isNotEmpty) {
+      try {
+        final partes = widget.filtros['dataCadastro']!.split('/');
+        if (partes.length == 3) {
+          final dia = int.parse(partes[0]);
+          final mes = int.parse(partes[1]);
+          final ano = int.parse(partes[2]);
+
+          final inicioDoDia = DateTime(ano, mes, dia, 0, 0, 0);
+          final fimDoDia = DateTime(ano, mes, dia, 23, 59, 59);
+
+          query = query
+              .where('dataCadastro', isGreaterThanOrEqualTo: inicioDoDia)
+              .where('dataCadastro', isLessThanOrEqualTo: fimDoDia);
+        }
+      } catch (e) {
+        print("Erro ao converter dataCadastro: $e");
+      }
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Resultados da Pesquisa")),
-      body: carregando
-          ? const Center(child: CircularProgressIndicator())
-          : resultados.isEmpty
-              ? const Center(child: Text("Nenhum cliente encontrado."))
-              : ListView.builder(
-                  itemCount: resultados.length,
-                  itemBuilder: (context, index) {
-                    final cliente = resultados[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      child: ListTile(
-                        title: Text(cliente['nome'] ?? "Sem nome"),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("CPF: ${cliente['cpf'] ?? ''}"),
-                            Text("E-mail: ${cliente['email'] ?? ''}"),
-                            Text("Telefone: ${cliente['telefone'] ?? ''}"),
-                            Text("Aniversário: ${cliente['aniversario'] ?? ''}"),
-                            Text("Produto: ${cliente['produto'] ?? ''}"),
-                            Text("Marca: ${cliente['marca'] ?? ''}"),
-                            Text("Observações: ${cliente['observacoes'] ?? ''}"),
-                            Text("Data Cadastro: ${_formatarData(cliente['dataCadastro'])}"),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+      appBar: AppBar(
+        title: const Text("Resultado da Pesquisa"),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: query.snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs;
+
+          if (docs.isEmpty) {
+            return const Center(child: Text("Nenhum cliente encontrado."));
+          }
+
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final cliente = docs[index].data() as Map<String, dynamic>;
+
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: ListTile(
+                  title: Text(cliente['nome'] ?? ''),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("CPF: ${cliente['cpf'] ?? ''}"),
+                      Text("Telefone: ${cliente['telefone'] ?? ''}"),
+                      Text("E-mail: ${cliente['email'] ?? ''}"),
+                      Text("Produto: ${cliente['produto'] ?? ''}"),
+                      Text("Marca: ${cliente['marca'] ?? ''}"),
+                      Text("Observações: ${cliente['observacoes'] ?? ''}"),
+                      if (cliente['dataCadastro'] != null)
+                        Text("Cadastro: ${dateFormat.format((cliente['dataCadastro'] as Timestamp).toDate())}"),
+                      if (cliente['aniversario'] != null)
+                        Text("Aniversário: ${cliente['aniversario']}"),
+                    ],
+                  ),
                 ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
