@@ -1,143 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
-import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 
 class CadastroPage extends StatefulWidget {
+  const CadastroPage({Key? key}) : super(key: key);
+
   @override
   _CadastroPageState createState() => _CadastroPageState();
 }
 
 class _CadastroPageState extends State<CadastroPage> {
-  final _formKey = GlobalKey<FormState>();
+  final cpfController = MaskedTextController(mask: '000.000.000-00');
+  final nomeController = TextEditingController();
+  final emailController = TextEditingController();
+  final telefoneController = MaskedTextController(mask: '(00) 00000-0000');
+  final aniversarioController = MaskedTextController(mask: '00/00/0000');
+  final produtoController = TextEditingController();
+  final marcaController = TextEditingController();
+  final observacoesController = TextEditingController();
 
-  final cpfFormatter = MaskTextInputFormatter(mask: "###.###.###-##");
-  final phoneFormatter = MaskTextInputFormatter(mask: "(##) #####-####");
-  final dateFormatter = MaskTextInputFormatter(mask: "##/##/####");
-
-  final _cpfController = TextEditingController();
-  final _nomeController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _telefoneController = TextEditingController();
-  final _aniversarioController = TextEditingController();
-  final _produtoController = TextEditingController();
-  final _observacoesController = TextEditingController();
-
-  String? _marcaSelecionada;
-  List<String> _marcas = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _carregarMarcas();
-  }
-
-  Future<void> _carregarMarcas() async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection("marcas").get();
-    setState(() {
-      _marcas =
-          snapshot.docs.map((doc) => doc["nome"]?.toString() ?? "").toList();
-    });
-  }
-
-  void _salvarCliente() async {
-    if (_formKey.currentState!.validate()) {
-      await FirebaseFirestore.instance.collection("clientes").add({
-        "cpf": _cpfController.text,
-        "nome": _nomeController.text,
-        "email": _emailController.text,
-        "telefone": _telefoneController.text,
-        "aniversario": _aniversarioController.text,
-        "produto": _produtoController.text,
-        "marca": _marcaSelecionada ?? "",
-        "observacoes": _observacoesController.text,
-        "dataCadastro":
-            DateFormat("dd/MM/yyyy").format(DateTime.now()), // data formatada
+  Future<void> _salvarCadastro() async {
+    try {
+      await FirebaseFirestore.instance.collection('clientes').add({
+        'cpf': cpfController.text,
+        'nome': nomeController.text,
+        'nomeLower': nomeController.text.toLowerCase(),
+        'email': emailController.text,
+        'telefone': telefoneController.text,
+        'aniversario': aniversarioController.text,
+        'produto': produtoController.text,
+        'marca': marcaController.text,
+        'observacoes': observacoesController.text,
+        'dataCadastro': FieldValue.serverTimestamp(), // automático no Firebase
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Cliente cadastrado com sucesso!")),
+        const SnackBar(content: Text("Cadastro salvo com sucesso!")),
       );
 
-      _formKey.currentState!.reset();
-      _cpfController.clear();
-      _nomeController.clear();
-      _emailController.clear();
-      _telefoneController.clear();
-      _aniversarioController.clear();
-      _produtoController.clear();
-      _observacoesController.clear();
-      setState(() => _marcaSelecionada = null);
+      cpfController.clear();
+      nomeController.clear();
+      emailController.clear();
+      telefoneController.clear();
+      aniversarioController.clear();
+      produtoController.clear();
+      marcaController.clear();
+      observacoesController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao salvar: $e")),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Cadastro de Cliente")),
+      appBar: AppBar(title: const Text("Cadastro de Clientes")),
       body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _cpfController,
-                decoration: InputDecoration(labelText: "CPF"),
-                inputFormatters: [cpfFormatter],
-                keyboardType: TextInputType.number,
-                validator: (value) =>
-                    value == null || value.isEmpty ? "Informe o CPF" : null,
-              ),
-              TextFormField(
-                controller: _nomeController,
-                decoration: InputDecoration(labelText: "Nome"),
-                validator: (value) =>
-                    value == null || value.isEmpty ? "Informe o nome" : null,
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(labelText: "E-mail"),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              TextFormField(
-                controller: _telefoneController,
-                decoration: InputDecoration(labelText: "Telefone"),
-                inputFormatters: [phoneFormatter],
-                keyboardType: TextInputType.phone,
-              ),
-              TextFormField(
-                controller: _aniversarioController,
-                decoration: InputDecoration(labelText: "Data de Aniversário"),
-                inputFormatters: [dateFormatter],
-                keyboardType: TextInputType.number,
-              ),
-              TextFormField(
-                controller: _produtoController,
-                decoration: InputDecoration(labelText: "Produto Desejado"),
-              ),
-              DropdownButtonFormField<String>(
-                value: _marcaSelecionada,
-                items: _marcas
-                    .map((marca) =>
-                        DropdownMenuItem(value: marca, child: Text(marca)))
-                    .toList(),
-                onChanged: (value) => setState(() => _marcaSelecionada = value),
-                decoration: InputDecoration(labelText: "Marca"),
-              ),
-              TextFormField(
-                controller: _observacoesController,
-                decoration: InputDecoration(labelText: "Observações"),
-                maxLines: 3,
-              ),
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _salvarCliente,
-                child: Text("Salvar"),
-              ),
-            ],
-          ),
+        padding: const EdgeInsets.all(16.0),
+        child: ListView(
+          children: [
+            TextField(controller: cpfController, decoration: const InputDecoration(labelText: "CPF")),
+            TextField(controller: nomeController, decoration: const InputDecoration(labelText: "Nome")),
+            TextField(controller: emailController, decoration: const InputDecoration(labelText: "E-mail")),
+            TextField(controller: telefoneController, decoration: const InputDecoration(labelText: "Telefone")),
+            TextField(controller: aniversarioController, decoration: const InputDecoration(labelText: "Data de Aniversário")),
+            TextField(controller: produtoController, decoration: const InputDecoration(labelText: "Produto desejado")),
+            TextField(controller: marcaController, decoration: const InputDecoration(labelText: "Marca")),
+            TextField(controller: observacoesController, decoration: const InputDecoration(labelText: "Observações")),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _salvarCadastro,
+              child: const Text("Salvar"),
+            ),
+          ],
         ),
       ),
     );
