@@ -13,7 +13,8 @@ class ResultadoPesquisaPage extends StatefulWidget {
 }
 
 class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
-  List<Map<String, dynamic>> resultados = [];
+  List<DocumentSnapshot> clientes = [];
+  bool carregando = true;
 
   @override
   void initState() {
@@ -22,144 +23,159 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
   }
 
   Future<void> _pesquisar() async {
-    try {
-      Query query = FirebaseFirestore.instance.collection('clientes');
+    setState(() {
+      carregando = true;
+    });
 
-      // 🔹 Filtro direto para dataCadastro (Timestamp no Firestore)
-      if (widget.filtros['dataCadastro'] != null &&
-          widget.filtros['dataCadastro']!.isNotEmpty) {
-        final dataCadastroFiltro =
-            DateFormat('dd/MM/yyyy').parse(widget.filtros['dataCadastro']!);
+    QuerySnapshot querySnapshot =
+        await FirebaseFirestore.instance.collection('clientes').get();
 
-        final inicio = DateTime(
-            dataCadastroFiltro.year, dataCadastroFiltro.month, dataCadastroFiltro.day, 0, 0, 0);
-        final fim = DateTime(
-            dataCadastroFiltro.year, dataCadastroFiltro.month, dataCadastroFiltro.day, 23, 59, 59);
+    List<DocumentSnapshot> resultados = querySnapshot.docs;
 
-        query = query
-            .where('dataCadastro', isGreaterThanOrEqualTo: Timestamp.fromDate(inicio))
-            .where('dataCadastro', isLessThanOrEqualTo: Timestamp.fromDate(fim));
-      }
+    // Aplicar filtros
+    final filtros = widget.filtros;
 
-      final snapshot = await query.get();
-      final todos = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
+    if (filtros['cpf'] != null && filtros['cpf']!.isNotEmpty) {
+      String cpfFiltro = filtros['cpf']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final cpf = (doc['cpf'] ?? '').toString().toLowerCase();
+        return cpf.contains(cpfFiltro);
       }).toList();
-
-      // 🔹 Aplicar filtros em memória (case-insensitive, substring)
-      resultados = todos.where((cliente) {
-        bool match = true;
-
-        // Nome
-        if (widget.filtros['nome'] != null &&
-            widget.filtros['nome']!.isNotEmpty) {
-          final filtro = widget.filtros['nome']!.toLowerCase();
-          final nomeCliente = (cliente['nome'] ?? '').toString().toLowerCase();
-          if (!nomeCliente.contains(filtro)) match = false;
-        }
-
-        // CPF
-        if (widget.filtros['cpf'] != null &&
-            widget.filtros['cpf']!.isNotEmpty) {
-          final filtro = widget.filtros['cpf']!.replaceAll(RegExp(r'\D'), '');
-          final cpfCliente =
-              (cliente['cpf'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-          if (!cpfCliente.contains(filtro)) match = false;
-        }
-
-        // E-mail
-        if (widget.filtros['email'] != null &&
-            widget.filtros['email']!.isNotEmpty) {
-          final filtro = widget.filtros['email']!.toLowerCase();
-          final emailCliente =
-              (cliente['email'] ?? '').toString().toLowerCase();
-          if (!emailCliente.contains(filtro)) match = false;
-        }
-
-        // Data de aniversário (comparação substring para permitir dd/MM)
-        if (widget.filtros['aniversario'] != null &&
-            widget.filtros['aniversario']!.isNotEmpty) {
-          final filtro = widget.filtros['aniversario']!;
-          final aniversarioCliente =
-              (cliente['aniversario'] ?? '').toString();
-          if (!aniversarioCliente.contains(filtro)) match = false;
-        }
-
-        // Produto
-        if (widget.filtros['produto'] != null &&
-            widget.filtros['produto']!.isNotEmpty) {
-          final filtro = widget.filtros['produto']!.toLowerCase();
-          final produtoCliente =
-              (cliente['produto'] ?? '').toString().toLowerCase();
-          if (!produtoCliente.contains(filtro)) match = false;
-        }
-
-        // Observações
-        if (widget.filtros['observacoes'] != null &&
-            widget.filtros['observacoes']!.isNotEmpty) {
-          final filtro = widget.filtros['observacoes']!.toLowerCase();
-          final obsCliente =
-              (cliente['observacoes'] ?? '').toString().toLowerCase();
-          if (!obsCliente.contains(filtro)) match = false;
-        }
-
-        // Marca (continua exata, vindo de dropdown)
-        if (widget.filtros['marca'] != null &&
-            widget.filtros['marca']!.isNotEmpty) {
-          final filtro = widget.filtros['marca']!;
-          final marcaCliente = (cliente['marca'] ?? '').toString();
-          if (marcaCliente != filtro) match = false;
-        }
-
-        return match;
-      }).toList();
-
-      setState(() {});
-    } catch (e) {
-      print('Erro na pesquisa: $e');
     }
+
+    if (filtros['nome'] != null && filtros['nome']!.isNotEmpty) {
+      String nomeFiltro = filtros['nome']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final nome = (doc['nome'] ?? '').toString().toLowerCase();
+        return nome.contains(nomeFiltro);
+      }).toList();
+    }
+
+    if (filtros['email'] != null && filtros['email']!.isNotEmpty) {
+      String emailFiltro = filtros['email']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final email = (doc['email'] ?? '').toString().toLowerCase();
+        return email.contains(emailFiltro);
+      }).toList();
+    }
+
+    if (filtros['telefone'] != null && filtros['telefone']!.isNotEmpty) {
+      String telefoneFiltro = filtros['telefone']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final telefone = (doc['telefone'] ?? '').toString().toLowerCase();
+        return telefone.contains(telefoneFiltro);
+      }).toList();
+    }
+
+    if (filtros['aniversario'] != null && filtros['aniversario']!.isNotEmpty) {
+      String aniversarioFiltro = filtros['aniversario']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final aniversario = (doc['aniversario'] ?? '').toString().toLowerCase();
+        return aniversario.contains(aniversarioFiltro);
+      }).toList();
+    }
+
+    if (filtros['produto'] != null && filtros['produto']!.isNotEmpty) {
+      String produtoFiltro = filtros['produto']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final produto = (doc['produto'] ?? '').toString().toLowerCase();
+        return produto.contains(produtoFiltro);
+      }).toList();
+    }
+
+    if (filtros['marca'] != null && filtros['marca']!.isNotEmpty) {
+      String marcaFiltro = filtros['marca']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final marca = (doc['marca'] ?? '').toString().toLowerCase();
+        return marca.contains(marcaFiltro);
+      }).toList();
+    }
+
+    if (filtros['observacoes'] != null && filtros['observacoes']!.isNotEmpty) {
+      String obsFiltro = filtros['observacoes']!.toLowerCase();
+      resultados = resultados.where((doc) {
+        final obs = (doc['observacoes'] ?? '').toString().toLowerCase();
+        return obs.contains(obsFiltro);
+      }).toList();
+    }
+
+    if (filtros['dataCadastro'] != null &&
+        filtros['dataCadastro']!.isNotEmpty) {
+      try {
+        final formato = DateFormat('dd/MM/yyyy');
+        final dataFiltro = formato.parse(filtros['dataCadastro']!);
+
+        resultados = resultados.where((doc) {
+          if (doc['dataCadastro'] != null &&
+              doc['dataCadastro'] is Timestamp) {
+            final data = (doc['dataCadastro'] as Timestamp).toDate();
+            return data.day == dataFiltro.day &&
+                data.month == dataFiltro.month &&
+                data.year == dataFiltro.year;
+          }
+          return false;
+        }).toList();
+      } catch (e) {
+        debugPrint('Erro ao converter data: $e');
+      }
+    }
+
+    setState(() {
+      clientes = resultados;
+      carregando = false;
+    });
   }
 
-  String formatarData(dynamic valor) {
-    if (valor is Timestamp) {
-      return DateFormat('dd/MM/yyyy').format(valor.toDate());
-    }
-    return valor?.toString() ?? '';
+  String _formatarCampo(String? valor) {
+    return (valor == null || valor.isEmpty) ? '-' : valor;
+  }
+
+  String _formatarData(Timestamp? timestamp) {
+    if (timestamp == null) return '-';
+    final data = timestamp.toDate();
+    return DateFormat('dd/MM/yyyy').format(data);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Resultados da Pesquisa")),
-      body: resultados.isEmpty
-          ? const Center(child: Text("Nenhum cliente encontrado."))
-          : ListView.builder(
-              itemCount: resultados.length,
-              itemBuilder: (context, index) {
-                final cliente = resultados[index];
-                return Card(
-                  margin: const EdgeInsets.all(8),
-                  child: ListTile(
-                    title: Text(cliente['nome'] ?? ''),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("CPF: ${cliente['cpf'] ?? ''}"),
-                        Text("E-mail: ${cliente['email'] ?? ''}"),
-                        Text("Telefone: ${cliente['telefone'] ?? ''}"),
-                        Text("Aniversário: ${cliente['aniversario'] ?? ''}"),
-                        Text("Produto: ${cliente['produto'] ?? ''}"),
-                        Text("Marca: ${cliente['marca'] ?? ''}"),
-                        Text("Obs: ${cliente['observacoes'] ?? ''}"),
-                        Text("Cadastro: ${formatarData(cliente['dataCadastro'])}"),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+      appBar: AppBar(
+        title: const Text('Resultado da Pesquisa'),
+      ),
+      body: carregando
+          ? const Center(child: CircularProgressIndicator())
+          : clientes.isEmpty
+              ? const Center(child: Text('Nenhum cliente encontrado.'))
+              : ListView.builder(
+                  itemCount: clientes.length,
+                  itemBuilder: (context, index) {
+                    var cliente = clientes[index].data() as Map<String, dynamic>;
+                    return Card(
+                      margin:
+                          const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      child: ListTile(
+                        title: Text(_formatarCampo(cliente['nome'])),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('CPF: ${_formatarCampo(cliente['cpf'])}'),
+                            Text('Email: ${_formatarCampo(cliente['email'])}'),
+                            Text('Telefone: ${_formatarCampo(cliente['telefone'])}'),
+                            Text(
+                                'Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
+                            Text(
+                                'Produto: ${_formatarCampo(cliente['produto'])}'),
+                            Text('Marca: ${_formatarCampo(cliente['marca'])}'),
+                            Text(
+                                'Observações: ${_formatarCampo(cliente['observacoes'])}'),
+                            Text(
+                                'Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }
