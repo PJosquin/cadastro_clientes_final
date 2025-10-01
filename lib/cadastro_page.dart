@@ -67,7 +67,33 @@ class _CadastroPageState extends State<CadastroPage> {
             TextField(controller: telefoneController, decoration: const InputDecoration(labelText: "Telefone")),
             TextField(controller: aniversarioController, decoration: const InputDecoration(labelText: "Data de Aniversário")),
             TextField(controller: produtoController, decoration: const InputDecoration(labelText: "Produto desejado")),
-            TextField(controller: marcaController, decoration: const InputDecoration(labelText: "Marca")),
+            StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance.collection('marcas').snapshots(),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData) {
+      return const CircularProgressIndicator();
+    }
+
+    var marcas = snapshot.data!.docs.map((doc) => doc['nome'].toString()).toList();
+
+    return DropdownButtonFormField<String>(
+      value: marcaController.text.isNotEmpty ? marcaController.text : null,
+      decoration: const InputDecoration(labelText: 'Marca'),
+      items: marcas.map((marca) {
+        return DropdownMenuItem(
+          value: marca,
+          child: Text(marca),
+        );
+      }).toList(),
+      onChanged: (valor) {
+        setState(() {
+          marcaController.text = valor ?? '';
+        });
+      },
+    );
+  },
+),
+
             TextField(controller: observacoesController, decoration: const InputDecoration(labelText: "Observações")),
             const SizedBox(height: 20),
             ElevatedButton(
