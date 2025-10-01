@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ResultadoPesquisaPage extends StatefulWidget {
   final Map<String, String> filtros;
@@ -32,7 +33,6 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
 
     List<DocumentSnapshot> resultados = querySnapshot.docs;
 
-    // Aplicar filtros
     final filtros = widget.filtros;
 
     if (filtros['cpf'] != null && filtros['cpf']!.isNotEmpty) {
@@ -136,6 +136,18 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
     return DateFormat('dd/MM/yyyy').format(data);
   }
 
+  Future<void> _abrirWhatsApp(String numero) async {
+    final telefoneLimpo = numero
+        .replaceAll(RegExp(r'[^0-9]'), '')
+        .replaceFirst(RegExp(r'^0+'), '');
+
+    final url = Uri.parse("https://wa.me/55$telefoneLimpo?text=Olá,%20tudo%20bem?");
+
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Não foi possível abrir o WhatsApp');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,8 +163,8 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
                   itemBuilder: (context, index) {
                     var cliente = clientes[index].data() as Map<String, dynamic>;
                     return Card(
-                      margin:
-                          const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      margin: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 16),
                       child: ListTile(
                         title: Text(_formatarCampo(cliente['nome'])),
                         subtitle: Column(
@@ -161,16 +173,21 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
                             Text('CPF: ${_formatarCampo(cliente['cpf'])}'),
                             Text('Email: ${_formatarCampo(cliente['email'])}'),
                             Text('Telefone: ${_formatarCampo(cliente['telefone'])}'),
-                            Text(
-                                'Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
-                            Text(
-                                'Produto: ${_formatarCampo(cliente['produto'])}'),
+                            Text('Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
+                            Text('Produto: ${_formatarCampo(cliente['produto'])}'),
                             Text('Marca: ${_formatarCampo(cliente['marca'])}'),
-                            Text(
-                                'Observações: ${_formatarCampo(cliente['observacoes'])}'),
-                            Text(
-                                'Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
+                            Text('Observações: ${_formatarCampo(cliente['observacoes'])}'),
+                            Text('Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
                           ],
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.chat, color: Colors.green),
+                          onPressed: () {
+                            final telefone = cliente['telefone'] ?? '';
+                            if (telefone.isNotEmpty) {
+                              _abrirWhatsApp(telefone);
+                            }
+                          },
                         ),
                       ),
                     );
