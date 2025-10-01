@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ResultadoPesquisaPage extends StatefulWidget {
   final Map<String, String> filtros;
@@ -32,7 +34,6 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
 
     List<DocumentSnapshot> resultados = querySnapshot.docs;
 
-    // Aplicar filtros
     final filtros = widget.filtros;
 
     if (filtros['cpf'] != null && filtros['cpf']!.isNotEmpty) {
@@ -60,9 +61,11 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
     }
 
     if (filtros['telefone'] != null && filtros['telefone']!.isNotEmpty) {
-      String telefoneFiltro = filtros['telefone']!.toLowerCase();
+      String telefoneFiltro =
+          filtros['telefone']!.replaceAll(RegExp(r'[^0-9]'), '');
       resultados = resultados.where((doc) {
-        final telefone = (doc['telefone'] ?? '').toString().toLowerCase();
+        final telefone =
+            (doc['telefone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
         return telefone.contains(telefoneFiltro);
       }).toList();
     }
@@ -136,6 +139,24 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
     return DateFormat('dd/MM/yyyy').format(data);
   }
 
+  Future<void> _enviarWhatsApp(String telefone, String mensagem) async {
+    String numero = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!numero.startsWith('55')) {
+      numero = '55$numero'; // adiciona DDI Brasil
+    }
+
+    final url =
+        Uri.parse("https://wa.me/$numero?text=${Uri.encodeComponent(mensagem)}");
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o WhatsApp.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -161,16 +182,35 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
                             Text('CPF: ${_formatarCampo(cliente['cpf'])}'),
                             Text('Email: ${_formatarCampo(cliente['email'])}'),
                             Text('Telefone: ${_formatarCampo(cliente['telefone'])}'),
-                            Text(
-                                'Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
-                            Text(
-                                'Produto: ${_formatarCampo(cliente['produto'])}'),
+                            Text('Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
+                            Text('Produto: ${_formatarCampo(cliente['produto'])}'),
                             Text('Marca: ${_formatarCampo(cliente['marca'])}'),
-                            Text(
-                                'Observações: ${_formatarCampo(cliente['observacoes'])}'),
-                            Text(
-                                'Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
+                            Text('Observações: ${_formatarCampo(cliente['observacoes'])}'),
+                            Text('Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
                           ],
+                        ),
+                        trailing: IconButton(
+  icon: const Icon(Icons.chat, color: Colors.green), // Ícone genérico de chat
+  onPressed: () {
+    final telefone = (cliente['telefone'] ?? '').toString();
+
+    if (telefone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente sem telefone cadastrado.')),
+      );
+      return;
+    }
+
+    // Remove caracteres não numéricos e adiciona DDI do Brasil (55)
+    final numero = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    final numeroComDDI = numero.startsWith('55') ? numero : '55$numero';
+
+    // Mensagem padrão
+    final mensagem = Uri.encodeComponent("Olá ${cliente['nome']}, tudo bem?");
+    final url = "https://wa.me/$numeroComDDI?text=$mensagem";
+
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                          },
                         ),
                       ),
                     );
