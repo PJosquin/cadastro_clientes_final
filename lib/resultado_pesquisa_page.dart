@@ -75,6 +75,22 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
       }).toList();
     }
 
+    // 🔹 Novo filtro: mês de aniversário
+    if (filtros['mesAniversario'] != null &&
+        filtros['mesAniversario']!.isNotEmpty) {
+      int mesFiltro = int.parse(filtros['mesAniversario']!); // 1-12
+      resultados = resultados.where((doc) {
+        final aniversario = (doc['aniversario'] ?? '').toString();
+        if (aniversario.isEmpty) return false;
+        try {
+          final data = DateFormat('dd/MM/yyyy').parse(aniversario);
+          return data.month == mesFiltro;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+    }
+
     if (filtros['produto'] != null && filtros['produto']!.isNotEmpty) {
       String produtoFiltro = filtros['produto']!.toLowerCase();
       resultados = resultados.where((doc) {
@@ -136,15 +152,13 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
     return DateFormat('dd/MM/yyyy').format(data);
   }
 
-  Future<void> _abrirWhatsApp(String numero) async {
-    final telefoneLimpo = numero
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .replaceFirst(RegExp(r'^0+'), '');
-
-    final url = Uri.parse("https://wa.me/55$telefoneLimpo?text=Olá,%20tudo%20bem?");
-
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint('Não foi possível abrir o WhatsApp');
+  Future<void> _abrirWhatsApp(String telefone) async {
+    final telLimpo = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    final url = "https://wa.me/$telLimpo";
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      debugPrint("Não foi possível abrir o WhatsApp");
     }
   }
 
@@ -163,8 +177,8 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
                   itemBuilder: (context, index) {
                     var cliente = clientes[index].data() as Map<String, dynamic>;
                     return Card(
-                      margin: const EdgeInsets.symmetric(
-                          vertical: 8, horizontal: 16),
+                      margin:
+                          const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                       child: ListTile(
                         title: Text(_formatarCampo(cliente['nome'])),
                         subtitle: Column(

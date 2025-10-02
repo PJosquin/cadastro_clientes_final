@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'cadastro_page.dart';
 import 'lista_clientes.dart';
 import 'filtro_page.dart';
+import 'pesquisa_aniversariantes_page.dart'; // <-- importa a nova página
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +21,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: HomePage(),
+      home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -65,6 +66,16 @@ class HomePage extends StatelessWidget {
                 );
               },
               child: const Text("Pesquisar com Filtros"),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PesquisaAniversariantesPage()),
+                );
+              },
+              child: const Text("Pesquisa de Aniversariantes"),
             ),
           ],
         ),
