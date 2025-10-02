@@ -140,16 +140,18 @@ class _PesquisaAniversariantesPageState
                                   trailing: IconButton(
                                     icon: const Icon(Icons.message,
                                         color: Colors.green),
-                                    onPressed: () {
-                                      if (cliente['telefone'] != null &&
-                                          cliente['telefone']
-                                              .toString()
-                                              .isNotEmpty) {
-                                        _abrirWhatsApp(
-                                          cliente['telefone'].toString(),
-                                          cliente['nome'] ?? '',
+                                    onPressed: () async {
+    final telefone = (cliente['telefone'] ?? '').replaceAll(RegExp(r'\D'), '');
+    if (telefone.isNotEmpty) {
+      final url = Uri.parse("https://wa.me/55$telefone?text=Feliz%20Aniversário!");
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Não foi possível abrir o WhatsApp")),
                                         );
                                       }
+				     }
                                     },
                                   ),
                                 ),
