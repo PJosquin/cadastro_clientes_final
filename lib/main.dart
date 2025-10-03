@@ -3,10 +3,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'cadastro_page.dart';
 import 'lista_clientes.dart';
 import 'filtro_page.dart';
+import 'pesquisa_aniversariantes_page.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  // Inicializar suporte de datas (português Brasil ou global)
+  await initializeDateFormatting('pt_BR', null);
   runApp(const MyApp());
 }
 
@@ -66,7 +70,16 @@ class HomePage extends StatelessWidget {
               },
               child: const Text("Pesquisar com Filtros"),
             ),
-          ],
+         ElevatedButton(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PesquisaAniversariantesPage()),
+    );
+  },
+  child: const Text("Pesquisar Aniversariantes"),
+),
+	  ],
         ),
       ),
     );
