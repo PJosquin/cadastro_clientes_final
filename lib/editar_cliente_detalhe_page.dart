@@ -1,134 +1,125 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 
 class EditarClienteDetalhePage extends StatefulWidget {
   final String clienteId;
+  final Map<String, dynamic> dadosCliente;
 
-  const EditarClienteDetalhePage({Key? key, required this.clienteId})
-      : super(key: key);
+  const EditarClienteDetalhePage({
+    Key? key,
+    required this.clienteId,
+    required this.dadosCliente,
+  }) : super(key: key);
 
   @override
-  State<EditarClienteDetalhePage> createState() =>
-      _EditarClienteDetalhePageState();
+  State<EditarClienteDetalhePage> createState() => _EditarClienteDetalhePageState();
 }
 
 class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
-  final _formKey = GlobalKey<FormState>();
-  final Map<String, TextEditingController> _controllers = {};
-  bool _carregando = true;
-  Map<String, dynamic>? _dadosOriginais;
+  late final MaskedTextController cpfController;
+  late final MaskedTextController telefoneController;
+  late final TextEditingController nomeController;
+  late final TextEditingController emailController;
+  late final TextEditingController aniversarioController;
+  late final TextEditingController produtoController;
+  late final TextEditingController marcaController;
+  late final TextEditingController observacoesController;
 
   @override
   void initState() {
     super.initState();
-    _carregarDados();
+    final dados = widget.dadosCliente;
+
+    cpfController = MaskedTextController(mask: '000.000.000-00', text: dados['cpf'] ?? '');
+    telefoneController = MaskedTextController(mask: '(00) 00000-0000', text: dados['telefone'] ?? '');
+    nomeController = TextEditingController(text: dados['nome'] ?? '');
+    emailController = TextEditingController(text: dados['email'] ?? '');
+    aniversarioController = TextEditingController(text: dados['aniversario'] ?? '');
+    produtoController = TextEditingController(text: dados['produto'] ?? '');
+    marcaController = TextEditingController(text: dados['marca'] ?? '');
+    observacoesController = TextEditingController(text: dados['observacoes'] ?? '');
   }
 
-  Future<void> _carregarDados() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('clientes')
-        .doc(widget.clienteId)
-        .get();
+  Future<void> _salvarEdicao() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('clientes')
+          .doc(widget.clienteId)
+          .update({
+        'cpf': cpfController.text.trim(),
+        'telefone': telefoneController.text.trim(),
+        'nome': nomeController.text.trim(),
+        'email': emailController.text.trim(),
+        'aniversario': aniversarioController.text.trim(),
+        'produto': produtoController.text.trim(),
+        'marca': marcaController.text.trim(),
+        'observacoes': observacoesController.text.trim(),
+        'dataEdicao': DateTime.now(),
+      });
 
-    if (doc.exists) {
-      _dadosOriginais = doc.data();
-      for (var entry in _dadosOriginais!.entries) {
-        _controllers[entry.key] = TextEditingController(
-          text: entry.value?.toString() ?? '',
-        );
-      }
-    }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alterações salvas com sucesso!'),
+          duration: Duration(seconds: 1),
+        ),
+      );
 
-    setState(() {
-      _carregando = false;
-    });
-  }
-
-  Future<void> _salvarAlteracoes() async {
-    if (_dadosOriginais == null) return;
-
-    Map<String, dynamic> novosDados = {};
-    for (var key in _controllers.keys) {
-      novosDados[key] = _controllers[key]!.text.trim();
-    }
-
-    // preserva dataCadastro e atualiza dataEdicao
-    novosDados['dataCadastro'] = _dadosOriginais!['dataCadastro'];
-    novosDados['dataEdicao'] = DateTime.now().toIso8601String();
-
-    await FirebaseFirestore.instance
-        .collection('clientes')
-        .doc(widget.clienteId)
-        .set(novosDados, SetOptions(merge: false));
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cliente atualizado com sucesso!')),
-    );
-
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      Navigator.popUntil(context, (route) => route.isFirst);
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_carregando) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_dadosOriginais == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Editar Cliente'),
-          backgroundColor: Colors.orange,
-        ),
-        body: const Center(child: Text('Cliente não encontrado.')),
-      );
-    }
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Editar Cliente'),
-        backgroundColor: Colors.orange,
-      ),
+      appBar: AppBar(title: const Text('Editar Cliente')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              ..._controllers.entries.map((entry) {
-                final readOnly = entry.key == 'dataCadastro';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: TextFormField(
-                    controller: entry.value,
-                    readOnly: readOnly,
-                    decoration: InputDecoration(
-                      labelText: entry.key,
-                      border: const OutlineInputBorder(),
-                      filled: readOnly,
-                      fillColor:
-                          readOnly ? Colors.grey.shade200 : Colors.transparent,
-                    ),
-                  ),
-                );
-              }),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                label: const Text('Salvar Alterações'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: _salvarAlteracoes,
-              ),
-            ],
-          ),
+        child: ListView(
+          children: [
+            TextFormField(
+              controller: cpfController,
+              decoration: const InputDecoration(labelText: 'CPF'),
+            ),
+            TextFormField(
+              controller: nomeController,
+              decoration: const InputDecoration(labelText: 'Nome'),
+            ),
+            TextFormField(
+              controller: emailController,
+              decoration: const InputDecoration(labelText: 'E-mail'),
+            ),
+            TextFormField(
+              controller: telefoneController,
+              decoration: const InputDecoration(labelText: 'Telefone'),
+            ),
+            TextFormField(
+              controller: aniversarioController,
+              decoration: const InputDecoration(labelText: 'Data de Aniversário'),
+            ),
+            TextFormField(
+              controller: produtoController,
+              decoration: const InputDecoration(labelText: 'Produto desejado'),
+            ),
+            TextFormField(
+              controller: marcaController,
+              decoration: const InputDecoration(labelText: 'Marca'),
+            ),
+            TextFormField(
+              controller: observacoesController,
+              decoration: const InputDecoration(labelText: 'Observações'),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _salvarEdicao,
+              child: const Text('Salvar Alterações'),
+            ),
+          ],
         ),
       ),
     );
