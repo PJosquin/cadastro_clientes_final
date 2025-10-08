@@ -105,10 +105,42 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
               controller: produtoController,
               decoration: const InputDecoration(labelText: 'Produto desejado'),
             ),
-            TextFormField(
-              controller: marcaController,
-              decoration: const InputDecoration(labelText: 'Marca'),
+
+            // 🔽 Dropdown dinâmico de marcas (igual ao cadastro)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('marcas')
+                  .orderBy('nome')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                var marcas = snapshot.data!.docs
+                    .map((doc) => doc['nome'].toString())
+                    .toList();
+
+                return DropdownButtonFormField<String>(
+                  value: marcaController.text.isNotEmpty
+                      ? marcaController.text
+                      : null,
+                  items: marcas.map((marca) {
+                    return DropdownMenuItem<String>(
+                      value: marca,
+                      child: Text(marca),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      marcaController.text = value ?? '';
+                    });
+                  },
+                  decoration: const InputDecoration(labelText: 'Marca'),
+                );
+              },
             ),
+
             TextFormField(
               controller: observacoesController,
               decoration: const InputDecoration(labelText: 'Observações'),
