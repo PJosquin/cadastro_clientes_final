@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class RegistroVendaPage extends StatefulWidget {
   const RegistroVendaPage({Key? key}) : super(key: key);
@@ -9,45 +10,37 @@ class RegistroVendaPage extends StatefulWidget {
 }
 
 class _RegistroVendaPageState extends State<RegistroVendaPage> {
-  final _formKey = GlobalKey<FormState>();
-  final valorController = TextEditingController();
-  final pecasController = TextEditingController();
-  final notaController = TextEditingController();
-  final observacoesController = TextEditingController();
-  final buscaController = TextEditingController();
+  final TextEditingController buscaController = TextEditingController();
+  final TextEditingController valorController = TextEditingController();
+  final TextEditingController pecasController = TextEditingController();
+  final TextEditingController notaController = TextEditingController();
+  final TextEditingController observacoesController = TextEditingController();
 
- Map<String, dynamic>? clienteSelecionado;
   List<QueryDocumentSnapshot> resultados = [];
+  Map<String, dynamic>? clienteSelecionado;
 
-  Future<void> _buscarClientes(String texto) async {
-  if (texto.trim().isEmpty) {
-    setState(() => resultados = []);
-    return;
+  Future<void> buscarClientes(String termo) async {
+    termo = termo.toLowerCase().trim();
+    if (termo.isEmpty) {
+      setState(() => resultados = []);
+      return;
+    }
+
+    final snapshot =
+        await FirebaseFirestore.instance.collection('clientes').get();
+
+    setState(() {
+      resultados = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return (data['nome'] ?? '').toString().toLowerCase().contains(termo) ||
+            (data['telefone'] ?? '').toString().toLowerCase().contains(termo) ||
+            (data['cpf'] ?? '').toString().toLowerCase().contains(termo) ||
+            (data['email'] ?? '').toString().toLowerCase().contains(termo);
+      }).toList();
+    });
   }
 
-  final snap = await FirebaseFirestore.instance.collection('clientes').get();
-  final query = texto.toLowerCase().replaceAll(RegExp(r'[^0-9a-z@]'), '');
-
-  setState(() {
-    resultados = snap.docs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-
-      final nome = (data['nome'] ?? '').toString().toLowerCase();
-      final email = (data['email'] ?? '').toString().toLowerCase();
-      final cpf = (data['cpf'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
-      final telefone = (data['telefone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
-
-      // busca parcial e ignorando maiúsculas/minúsculas
-      return nome.contains(query) ||
-          email.contains(query) ||
-          cpf.contains(query) ||
-          telefone.contains(query);
-    }).toList();
-  });
-}
-
-
-  Future<void> _salvarVenda() async {
+  Future<void> salvarVenda() async {
     if (clienteSelecionado == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecione um cliente antes de salvar.')),
@@ -55,43 +48,34 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
       return;
     }
 
-    if (!_formKey.currentState!.validate()) return;
+    final valor = double.tryParse(valorController.text.replaceAll(',', '.')) ?? 0;
+    final pecas = int.tryParse(pecasController.text) ?? 0;
+    final nota = notaController.text.trim();
+    final obs = observacoesController.text.trim();
 
     try {
-      final valor = double.tryParse(valorController.text.replaceAll(',', '.')) ?? 0.0;
-      final pecas = int.tryParse(pecasController.text) ?? 0;
-      final nota = notaController.text.trim();
-      final obs = observacoesController.text.trim();
-
-     await FirebaseFirestore.instance.collection('vendas').add({
-  'clienteId': clienteSelecionado?['id'] ?? '',
-  'nome': clienteSelecionado?['nome'] ?? '',
-  'cpf': clienteSelecionado?['cpf'] ?? '',
-  'telefone': clienteSelecionado?['telefone'] ?? '',
-  'email': clienteSelecionado?['email'] ?? '',
-  'valor': valor,
-  'numero_pecas': pecas,
-  'numero_nota': nota,
-  'observacoes': obs,
-  'data': Timestamp.now(), // ✅ Importante: grava como tipo Timestamp
-});
+      await FirebaseFirestore.instance.collection('vendas').add({
+        'clienteId': clienteSelecionado!['id'],
+        'nome': clienteSelecionado!['nome'],
+        'cpf': clienteSelecionado!['cpf'],
+        'telefone': clienteSelecionado!['telefone'],
+        'email': clienteSelecionado!['email'],
+        'valor': valor,
+        'numero_pecas': pecas,
+        'numero_nota': nota,
+        'observacoes': obs,
+        'data': DateTime.now(),
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Venda salva com sucesso!')),
+        const SnackBar(content: Text('Venda registrada com sucesso!')),
       );
 
-      valorController.clear();
-      pecasController.clear();
-      notaController.clear();
-      observacoesController.clear();
-      buscaController.clear();
-      setState(() {
-        clienteSelecionado = null;
-        resultados = [];
-      });
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar: $e')),
+        SnackBar(content: Text('Erro ao registrar venda: $e')),
       );
     }
   }
@@ -102,84 +86,109 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
       appBar: AppBar(title: const Text('Registrar Venda')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text('Buscar Cliente:'),
-              TextField(
-                controller: buscaController,
-                decoration: const InputDecoration(
-                  hintText: 'Nome, CPF, telefone ou e-mail',
-                  suffixIcon: Icon(Icons.search),
-                ),
-                onChanged: _buscarClientes,
+        child: ListView(
+          children: [
+            // 🔍 Campo de busca de cliente
+            TextField(
+              controller: buscaController,
+              decoration: const InputDecoration(
+                labelText: 'Buscar cliente (nome, CPF, telefone, e-mail)',
+                prefixIcon: Icon(Icons.search),
               ),
-              const SizedBox(height: 8),
-              if (resultados.isNotEmpty)
-                ...resultados.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return ListTile(
-                    title: Text(data['nome'] ?? ''),
-                    subtitle: Text('${data['cpf'] ?? ''} • ${data['telefone'] ?? ''}'),
-                    onTap: () {
-                      setState(() {
-                        clienteSelecionado = {...data, 'id': doc.id};
-                        resultados = [];
-                        buscaController.text = data['nome'] ?? '';
-                      });
-                    },
-                  );
-                }),
-              if (clienteSelecionado != null)
-                Card(
+              onChanged: buscarClientes,
+            ),
+            const SizedBox(height: 10),
+
+            // 🔽 Lista de resultados
+            ...resultados.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
+                  title: Text(data['nome'] ?? ''),
+                  subtitle: Text(
+                      'CPF: ${data['cpf'] ?? ''} • Tel: ${data['telefone'] ?? ''}'),
+                  onTap: () {
+                    setState(() {
+                      clienteSelecionado = {...data, 'id': doc.id};
+                      resultados = [];
+                      buscaController.text = data['nome'] ?? '';
+                    });
+                  },
+                ),
+              );
+            }),
+
+            const SizedBox(height: 16),
+
+            // 👤 Cliente selecionado
+            if (clienteSelecionado != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
                   color: Colors.blue.shade50,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  child: ListTile(
-                    title: Text(clienteSelecionado!['nome'] ?? ''),
-                    subtitle: Text(
-                        '${clienteSelecionado!['cpf']} • ${clienteSelecionado!['telefone']}'),
-                    trailing: const Icon(Icons.check_circle, color: Colors.green),
-                  ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: valorController,
-                decoration: const InputDecoration(
-                  labelText: 'Valor da Venda (R\$)',
-                  prefixText: 'R\$ ',
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${clienteSelecionado!['nome']}  —  CPF: ${clienteSelecionado!['cpf']}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ],
                 ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                validator: (v) => v == null || v.isEmpty ? 'Informe o valor' : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: pecasController,
-                decoration: const InputDecoration(labelText: 'Número de Peças'),
-                keyboardType: TextInputType.number,
-                validator: (v) => v == null || v.isEmpty ? 'Informe o número de peças' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: notaController,
-                decoration: const InputDecoration(labelText: 'Número da Nota Fiscal'),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: observacoesController,
-                decoration: const InputDecoration(labelText: 'Observações'),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _salvarVenda,
-                child: const Text('Salvar Venda'),
-              ),
+              const SizedBox(height: 20),
             ],
-          ),
+
+            // 💰 Campos da venda
+            TextField(
+              controller: valorController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Valor da Venda (R\$)',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: pecasController,
+              keyboardType: TextInputType.number,
+              decoration:
+                  const InputDecoration(labelText: 'Número de Peças'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: notaController,
+              decoration:
+                  const InputDecoration(labelText: 'Número da Nota Fiscal'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: observacoesController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Observações'),
+            ),
+            const SizedBox(height: 20),
+
+            ElevatedButton.icon(
+              icon: const Icon(Icons.save),
+              label: const Text('Salvar Venda'),
+              onPressed: salvarVenda,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-
