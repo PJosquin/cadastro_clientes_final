@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
+import 'package:cadastro_clientes/historico_vendas_page.dart';
 
 class EditarClienteDetalhePage extends StatefulWidget {
   final String clienteId;
@@ -151,6 +152,22 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
               onPressed: _salvarEdicao,
               child: const Text('Salvar Alterações'),
             ),
+ElevatedButton.icon(
+  icon: const Icon(Icons.history),
+  label: const Text('Histórico de Vendas'),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HistoricoVendasPage(
+          clienteId: widget.clienteId,
+          nomeCliente: widget.dadosCliente['nome'] ?? 'Cliente',
+        ),
+      ),
+    );
+  },
+),
+
           ],
         ),
       ),

@@ -7,6 +7,7 @@ import 'lista_clientes.dart';
 import 'filtro_page.dart';
 import 'pesquisa_aniversariantes_page.dart';
 import 'editar_clientes_page.dart'; // página de edição
+import 'registro_venda_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -115,6 +116,16 @@ class HomePage extends StatelessWidget {
                 },
                 child: const Text("Editar Clientes"),
               ),
+		const SizedBox(height: 20),
+		ElevatedButton(
+ 		 onPressed: () {
+  		  Navigator.push(
+   		   context,
+   		   MaterialPageRoute(builder: (_) => const RegistroVendaPage()),
+  		  );
+		  },
+		  child: const Text("Registrar Venda"),
+		),
             ],
           ),
         ),
