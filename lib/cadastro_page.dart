@@ -25,35 +25,50 @@ class _CadastroPageState extends State<CadastroPage> {
   final DateTime dataCadastro = DateTime.now();
 
   Future<void> _salvarCliente() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        await FirebaseFirestore.instance.collection('clientes').add({
-          'cpf': cpfController.text,
-          'nome': nomeController.text,
-          'email': emailController.text,
-          'telefone': telefoneController.text,
-          'aniversario': aniversarioController.text,
-          'produto': produtoController.text,
-          'marca': marcaController.text,
-          'observacoes': observacoesController.text,
-          'dataCadastro': Timestamp.fromDate(dataCadastro),
-          'nomeLower': nomeController.text.toLowerCase(),
-        });
+    if (!_formKey.currentState!.validate()) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cliente salvo com sucesso!')),
-        );
+    final cpf = cpfController.text.trim();
+    final nome = nomeController.text.trim();
+    final email = emailController.text.trim();
+    final telefone = telefoneController.text.trim();
+    final aniversario = aniversarioController.text.trim();
+    final produto = produtoController.text.trim();
+    final marca = marcaController.text.trim();
+    final observacoes = observacoesController.text.trim();
 
-        _formKey.currentState!.reset();
-        cpfController.updateText('');
-        telefoneController.updateText('');
-        aniversarioController.updateText('');
-        marcaController.clear();
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar: $e')),
-        );
-      }
+    try {
+      await FirebaseFirestore.instance.collection('clientes').add({
+        'cpf': cpf,
+        'nome': nome,
+        'email': email,
+        'telefone': telefone,
+        'aniversario': aniversario,
+        'produto': produto,
+        'marca': marca,
+        'observacoes': observacoes,
+        'dataCadastro': dataCadastro,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente salvo com sucesso!')),
+      );
+
+      // 🧹 Limpar todos os campos após salvar
+      _formKey.currentState!.reset();
+      cpfController.updateText('');
+      telefoneController.updateText('');
+      aniversarioController.updateText('');
+      nomeController.clear();
+      emailController.clear();
+      produtoController.clear();
+      marcaController.clear();
+      observacoesController.clear();
+
+      setState(() {}); // força a atualização visual
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar: $e')),
+      );
     }
   }
 
