@@ -85,15 +85,9 @@ class _CadastroPageState extends State<CadastroPage> {
           child: ListView(
             children: [
               TextFormField(
-                controller: cpfController,
-                decoration: const InputDecoration(labelText: 'CPF'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Informe o CPF';
-                  }
-                  return null;
-                },
-              ),
+  controller: cpfController,
+  decoration: const InputDecoration(labelText: 'CPF (opcional)'),
+),
               TextFormField(
                 controller: nomeController,
                 decoration: const InputDecoration(labelText: 'Nome'),
@@ -105,15 +99,9 @@ class _CadastroPageState extends State<CadastroPage> {
                 },
               ),
               TextFormField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: 'E-mail'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Informe o e-mail';
-                  }
-                  return null;
-                },
-              ),
+  controller: emailController,
+  decoration: const InputDecoration(labelText: 'E-mail (opcional)'),
+),
               TextFormField(
                 controller: telefoneController,
                 decoration: const InputDecoration(labelText: 'Telefone'),
@@ -165,12 +153,6 @@ class _CadastroPageState extends State<CadastroPage> {
                       });
                     },
                     decoration: const InputDecoration(labelText: 'Marca'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Selecione uma marca';
-                      }
-                      return null;
-                    },
                   );
                 },
               ),

@@ -117,15 +117,27 @@ class HomePage extends StatelessWidget {
                 child: const Text("Editar Clientes"),
               ),
 		const SizedBox(height: 20),
-		ElevatedButton(
- 		 onPressed: () {
-  		  Navigator.push(
-   		   context,
-   		   MaterialPageRoute(builder: (_) => const RegistroVendaPage()),
-  		  );
-		  },
-		  child: const Text("Registrar Venda"),
-		),
+		ElevatedButton.icon(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF1976D2),
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+  ),
+  icon: const Icon(Icons.point_of_sale),
+  label: const Text(
+    "Registrar Venda",
+    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+  ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => RegistroVendaPage()),
+    );
+  },
+),
             ],
           ),
         ),
