@@ -16,6 +16,8 @@ class ResultadoPesquisaPage extends StatefulWidget {
 class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
   List<DocumentSnapshot> clientes = [];
   bool carregando = true;
+  final TextEditingController _mensagemController =
+      TextEditingController(text: "Olá, tudo bem?");
 
   @override
   void initState() {
@@ -120,18 +122,17 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
       }
     }
 
-    // 🔠 Ordena os clientes alfabeticamente por nome (A–Z)
-resultados.sort((a, b) {
-  final nomeA = ((a.data() as Map<String, dynamic>)['nome'] ?? '').toString().toLowerCase();
-  final nomeB = ((b.data() as Map<String, dynamic>)['nome'] ?? '').toString().toLowerCase();
-  return nomeA.compareTo(nomeB);
-});
+    // 🔤 Ordena os resultados por nome (alfabético)
+    resultados.sort((a, b) {
+      final nomeA = (a['nome'] ?? '').toString().toLowerCase();
+      final nomeB = (b['nome'] ?? '').toString().toLowerCase();
+      return nomeA.compareTo(nomeB);
+    });
 
-setState(() {
-  clientes = resultados;
-  carregando = false;
-});
-
+    setState(() {
+      clientes = resultados;
+      carregando = false;
+    });
   }
 
   String _formatarCampo(String? valor) {
@@ -144,63 +145,95 @@ setState(() {
     return DateFormat('dd/MM/yyyy').format(data);
   }
 
-  Future<void> _abrirWhatsApp(String numero) async {
+  Future<void> _abrirWhatsApp(String numero, String mensagem) async {
     final telefoneLimpo = numero
         .replaceAll(RegExp(r'[^0-9]'), '')
         .replaceFirst(RegExp(r'^0+'), '');
 
-    final url = Uri.parse("https://wa.me/55$telefoneLimpo?text=Olá,%20tudo%20bem?");
+    final mensagemEncoded = Uri.encodeComponent(mensagem.isEmpty
+        ? "Olá, tudo bem?"
+        : mensagem);
+
+    final url =
+        Uri.parse("https://wa.me/55$telefoneLimpo?text=$mensagemEncoded");
 
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint('Não foi possível abrir o WhatsApp');
+      debugPrint('❌ Não foi possível abrir o WhatsApp');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Resultado da Pesquisa'),
-      ),
-      body: carregando
-          ? const Center(child: CircularProgressIndicator())
-          : clientes.isEmpty
-              ? const Center(child: Text('Nenhum cliente encontrado.'))
-              : ListView.builder(
-                  itemCount: clientes.length,
-                  itemBuilder: (context, index) {
-                    var cliente = clientes[index].data() as Map<String, dynamic>;
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                          vertical: 8, horizontal: 16),
-                      child: ListTile(
-                        title: Text(_formatarCampo(cliente['nome'])),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('CPF: ${_formatarCampo(cliente['cpf'])}'),
-                            Text('Email: ${_formatarCampo(cliente['email'])}'),
-                            Text('Telefone: ${_formatarCampo(cliente['telefone'])}'),
-                            Text('Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
-                            Text('Produto: ${_formatarCampo(cliente['produto'])}'),
-                            Text('Marca: ${_formatarCampo(cliente['marca'])}'),
-                            Text('Observações: ${_formatarCampo(cliente['observacoes'])}'),
-                            Text('Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.chat, color: Colors.green),
-                          onPressed: () {
-                            final telefone = cliente['telefone'] ?? '';
-                            if (telefone.isNotEmpty) {
-                              _abrirWhatsApp(telefone);
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
+      appBar: AppBar(title: const Text('Resultado da Pesquisa')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _mensagemController,
+              decoration: InputDecoration(
+                labelText: 'Mensagem padrão para WhatsApp',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: carregando
+                ? const Center(child: CircularProgressIndicator())
+                : clientes.isEmpty
+                    ? const Center(child: Text('Nenhum cliente encontrado.'))
+                    : ListView.builder(
+                        itemCount: clientes.length,
+                        itemBuilder: (context, index) {
+                          var cliente =
+                              clientes[index].data() as Map<String, dynamic>;
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 16),
+                            child: ListTile(
+                              title: Text(_formatarCampo(cliente['nome'])),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('CPF: ${_formatarCampo(cliente['cpf'])}'),
+                                  Text(
+                                      'Email: ${_formatarCampo(cliente['email'])}'),
+                                  Text(
+                                      'Telefone: ${_formatarCampo(cliente['telefone'])}'),
+                                  Text(
+                                      'Aniversário: ${_formatarCampo(cliente['aniversario'])}'),
+                                  Text(
+                                      'Produto: ${_formatarCampo(cliente['produto'])}'),
+                                  Text(
+                                      'Marca: ${_formatarCampo(cliente['marca'])}'),
+                                  Text(
+                                      'Observações: ${_formatarCampo(cliente['observacoes'])}'),
+                                  Text(
+                                      'Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.chat, color: Colors.green),
+                                onPressed: () {
+                                  final telefone = cliente['telefone'] ?? '';
+                                  if (telefone.isNotEmpty) {
+                                    _abrirWhatsApp(
+                                      telefone,
+                                      _mensagemController.text,
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
 }
