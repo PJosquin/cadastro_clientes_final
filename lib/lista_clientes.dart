@@ -47,7 +47,11 @@ class _ListaClientesPageState extends State<ListaClientesPage> {
     return Scaffold(
       appBar: AppBar(title: Text("Lista de Clientes")),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('clientes').snapshots(),
+        stream: FirebaseFirestore.instance
+    .collection('clientes')
+    .orderBy('nome', descending: false) // 🔠 ordena de A → Z
+    .snapshots(),
+
         builder: (context, snapshot) {
           if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 

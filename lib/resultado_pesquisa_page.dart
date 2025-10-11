@@ -120,10 +120,18 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
       }
     }
 
-    setState(() {
-      clientes = resultados;
-      carregando = false;
-    });
+    // 🔠 Ordena os clientes alfabeticamente por nome (A–Z)
+resultados.sort((a, b) {
+  final nomeA = ((a.data() as Map<String, dynamic>)['nome'] ?? '').toString().toLowerCase();
+  final nomeB = ((b.data() as Map<String, dynamic>)['nome'] ?? '').toString().toLowerCase();
+  return nomeA.compareTo(nomeB);
+});
+
+setState(() {
+  clientes = resultados;
+  carregando = false;
+});
+
   }
 
   String _formatarCampo(String? valor) {
