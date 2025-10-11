@@ -118,6 +118,7 @@ class HomePage extends StatelessWidget {
               ),
 		const SizedBox(height: 20),
 		ElevatedButton(
+		 style: botaoPadrao,
  		 onPressed: () {
   		  Navigator.push(
    		   context,

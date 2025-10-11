@@ -14,7 +14,6 @@ class HistoricoVendasPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
- print('🟢 Cliente ID recebido: $clienteId | Nome: $nomeCliente');
     return Scaffold(
       appBar: AppBar(title: Text('Histórico de Vendas - $nomeCliente')),
       body: StreamBuilder<QuerySnapshot>(
@@ -27,39 +26,98 @@ class HistoricoVendasPage extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text('Nenhuma venda registrada.'));
           }
 
           final vendas = snapshot.data!.docs;
 
-          return ListView.builder(
-            itemCount: vendas.length,
-            itemBuilder: (context, index) {
-              final data = vendas[index].data() as Map<String, dynamic>;
-              final valor = data['valor'] ?? 0;
-              final pecas = data['numero_pecas'] ?? 0;
-              final nota = data['numero_nota'] ?? '';
-              final obs = data['observacoes'] ?? '';
-              final dataVenda = (data['data'] as Timestamp).toDate();
-              final dataFormatada = DateFormat('dd/MM/yyyy HH:mm').format(dataVenda);
+          // 🔹 Cálculo do somatório
+          double totalValor = 0;
+          int totalPecas = 0;
 
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-                child: ListTile(
-                  leading: const Icon(Icons.shopping_bag, color: Colors.blue),
-                  title: Text('R\$ ${valor.toStringAsFixed(2)} - $pecas peça(s)'),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (nota.isNotEmpty) Text('Nota: $nota'),
-                      if (obs.isNotEmpty) Text('Obs: $obs'),
-                      Text('Data: $dataFormatada'),
-                    ],
-                  ),
+          for (var doc in vendas) {
+            final data = doc.data() as Map<String, dynamic>;
+            totalValor += (data['valor'] ?? 0).toDouble();
+            totalPecas += ((data['numero_pecas'] ?? 0) as num).toInt();
+          }
+
+          return Column(
+            children: [
+              // 🔹 Faixa azul com totais
+              Container(
+                width: double.infinity,
+                color: Colors.blue.shade700,
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      '💰 TOTAL DE VENDAS',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Vendas registradas: ${vendas.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    Text(
+                      'Total de peças: $totalPecas',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                    Text(
+                      'Valor total: R\$ ${totalValor.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+
+              // 🔹 Lista de vendas
+              Expanded(
+                child: ListView.builder(
+                  itemCount: vendas.length,
+                  itemBuilder: (context, index) {
+                    final data = vendas[index].data() as Map<String, dynamic>;
+                    final valor = (data['valor'] ?? 0).toDouble();
+                    final pecas = (data['numero_pecas'] ?? 0).toInt();
+                    final nota = data['numero_nota'] ?? '';
+                    final obs = data['observacoes'] ?? '';
+                    final dataVenda = (data['data'] as Timestamp).toDate();
+                    final dataFormatada =
+                        DateFormat('dd/MM/yyyy HH:mm').format(dataVenda);
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 10),
+                      child: ListTile(
+                        leading:
+                            const Icon(Icons.shopping_bag, color: Colors.blue),
+                        title: Text(
+                            'R\$ ${valor.toStringAsFixed(2)} - $pecas peça(s)'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (nota.isNotEmpty) Text('Nota: $nota'),
+                            if (obs.isNotEmpty) Text('Obs: $obs'),
+                            Text('Data: $dataFormatada'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
