@@ -87,12 +87,6 @@ class _CadastroPageState extends State<CadastroPage> {
               TextFormField(
                 controller: cpfController,
                 decoration: const InputDecoration(labelText: 'CPF'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Informe o CPF';
-                  }
-                  return null;
-                },
               ),
               TextFormField(
                 controller: nomeController,
@@ -107,12 +101,6 @@ class _CadastroPageState extends State<CadastroPage> {
               TextFormField(
                 controller: emailController,
                 decoration: const InputDecoration(labelText: 'E-mail'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Informe o e-mail';
-                  }
-                  return null;
-                },
               ),
               TextFormField(
                 controller: telefoneController,
@@ -165,12 +153,6 @@ class _CadastroPageState extends State<CadastroPage> {
                       });
                     },
                     decoration: const InputDecoration(labelText: 'Marca'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Selecione uma marca';
-                      }
-                      return null;
-                    },
                   );
                 },
               ),
