@@ -212,8 +212,7 @@ class _ResultadoPesquisaPageState extends State<ResultadoPesquisaPage> {
                                   Text(
                                       'Observações: ${_formatarCampo(cliente['observacoes'])}'),
                                   Text(
-                                      'Data de Cadastro: ${_formatarData(cliente['dataCadastro'])}'),
-                                ],
+git status                                ],
                               ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.chat, color: Colors.green),

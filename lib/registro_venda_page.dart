@@ -17,43 +17,43 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   final TextEditingController _pecasController = TextEditingController();
   final TextEditingController _valorController = TextEditingController();
   final TextEditingController _observacaoController = TextEditingController();
+  final TextEditingController _dataController = TextEditingController(
+    text: DateFormat('dd/MM/yyyy').format(DateTime.now()),
+  );
 
   String? _clienteSelecionadoId;
   String? qrCodeNotaFiscal;
   List<Map<String, dynamic>> resultadosPesquisa = [];
   bool _salvando = false;
 
-  /// 🔎 Pesquisa clientes por parte do nome, CPF, telefone (com ou sem formatação) ou e-mail
-Future<void> _pesquisarClientes(String query) async {
-  if (query.isEmpty) {
-    setState(() => resultadosPesquisa = []);
-    return;
+  Future<void> _pesquisarClientes(String query) async {
+    if (query.isEmpty) {
+      setState(() => resultadosPesquisa = []);
+      return;
+    }
+
+    final queryLower = query.toLowerCase();
+
+    final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
+
+    final resultados = snapshot.docs.where((doc) {
+      final data = doc.data();
+      final nome = (data['nome'] ?? '').toString().toLowerCase();
+      final cpf = (data['cpf'] ?? '').toString().toLowerCase();
+      final telefone = (data['telefone'] ?? '').toString().toLowerCase();
+      final email = (data['email'] ?? '').toString().toLowerCase();
+
+      return nome.contains(queryLower) ||
+          cpf.contains(queryLower) ||
+          telefone.contains(queryLower) ||
+          email.contains(queryLower);
+    }).map((doc) => {'id': doc.id, ...doc.data()}).toList();
+
+    setState(() {
+      resultadosPesquisa = resultados;
+    });
   }
 
-  final queryLower = query.toLowerCase().replaceAll(RegExp(r'[^0-9a-z@]'), '');
-
-  final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
-
-  final resultados = snapshot.docs.where((doc) {
-    final data = doc.data();
-    final nome = (data['nome'] ?? '').toString().toLowerCase();
-    final cpf = (data['cpf'] ?? '').toString().replaceAll(RegExp(r'[^0-9a-z@]'), '').toLowerCase();
-    final telefone = (data['telefone'] ?? '').toString().replaceAll(RegExp(r'[^0-9a-z@]'), '').toLowerCase();
-    final email = (data['email'] ?? '').toString().toLowerCase();
-
-    return nome.contains(queryLower) ||
-        cpf.contains(queryLower) ||
-        telefone.contains(queryLower) ||
-        email.contains(queryLower);
-  }).map((doc) => {'id': doc.id, ...doc.data()}).toList();
-
-  setState(() {
-    resultadosPesquisa = resultados;
-  });
-}
-
-
-  /// 📸 Lê o QR Code da nota fiscal
   Future<void> _lerQRCode() async {
     final resultado = await Navigator.push(
       context,
@@ -67,7 +67,6 @@ Future<void> _pesquisarClientes(String query) async {
     }
   }
 
-  /// 💾 Salva a venda no Firestore
   Future<void> _salvarVenda() async {
     if (_clienteController.text.isEmpty ||
         _valorController.text.isEmpty ||
@@ -92,6 +91,9 @@ Future<void> _pesquisarClientes(String query) async {
               _valorController.text.replaceAll(',', '.').trim()) ??
           0.0;
 
+      final dataSelecionada =
+          DateFormat('dd/MM/yyyy').parse(_dataController.text);
+
       await FirebaseFirestore.instance.collection('vendas').add({
         'clienteId': _clienteSelecionadoId,
         'cliente': _clienteController.text,
@@ -99,7 +101,7 @@ Future<void> _pesquisarClientes(String query) async {
         'numero_pecas': int.tryParse(_pecasController.text) ?? 0,
         'valor': valorDouble,
         'observacoes': _observacaoController.text,
-        'data': DateTime.now(), // timestamp
+        'data': dataSelecionada,
         'dataRegistro': FieldValue.serverTimestamp(),
         'qrcode': qrCodeNotaFiscal ?? '',
       });
@@ -113,6 +115,7 @@ Future<void> _pesquisarClientes(String query) async {
       _pecasController.clear();
       _valorController.clear();
       _observacaoController.clear();
+      _dataController.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
       setState(() {
         qrCodeNotaFiscal = null;
         resultadosPesquisa = [];
@@ -127,44 +130,42 @@ Future<void> _pesquisarClientes(String query) async {
     }
   }
 
-  /// 🔗 Abre a nota fiscal salva via QR Code
-Future<void> _abrirNotaFiscal() async {
-  if (qrCodeNotaFiscal == null || qrCodeNotaFiscal!.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Nenhum QR Code salvo.')),
-    );
-    return;
-  }
-
-  String url = qrCodeNotaFiscal!.trim();
-
-  // 🔹 Corrige links que não têm http ou https
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    url = 'https://' + url;
-  }
-
-  final uri = Uri.tryParse(url);
-  if (uri == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Endereço inválido: $url')),
-    );
-    return;
-  }
-
-  try {
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched) {
+  Future<void> _abrirNotaFiscal() async {
+    if (qrCodeNotaFiscal == null || qrCodeNotaFiscal!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir a nota fiscal.')),
+        const SnackBar(content: Text('Nenhum QR Code salvo.')),
+      );
+      return;
+    }
+
+    String url = qrCodeNotaFiscal!.trim();
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Endereço inválido: $url')),
+      );
+      return;
+    }
+
+    try {
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível abrir a nota fiscal.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao abrir nota fiscal: $e')),
       );
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Erro ao abrir nota fiscal: $e')),
-    );
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +187,6 @@ Future<void> _abrirNotaFiscal() async {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // 🔹 Campo cliente
                   TextField(
                     controller: _clienteController,
                     decoration: const InputDecoration(
@@ -244,6 +244,44 @@ Future<void> _abrirNotaFiscal() async {
                     ),
                     keyboardType: TextInputType.number,
                   ),
+
+                  const SizedBox(height: 10),
+                  // 🔹 Campo Data da Venda (com ícone de calendário)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _dataController,
+                          decoration: const InputDecoration(
+                            labelText: 'Data da Venda',
+                            prefixIcon: Icon(Icons.date_range),
+                          ),
+                          readOnly: true,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.calendar_today,
+                            color: Colors.blueAccent),
+                        tooltip: 'Selecionar Data',
+                        onPressed: () async {
+                          final dataSelecionada = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                            locale: const Locale('pt', 'BR'),
+                          );
+                          if (dataSelecionada != null) {
+                            _dataController.text =
+                                DateFormat('dd/MM/yyyy')
+                                    .format(dataSelecionada);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 10),
                   TextField(
                     controller: _pecasController,
@@ -316,3 +354,4 @@ Future<void> _abrirNotaFiscal() async {
     );
   }
 }
+
