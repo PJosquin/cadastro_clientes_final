@@ -23,36 +23,35 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   List<Map<String, dynamic>> resultadosPesquisa = [];
   bool _salvando = false;
 
-  /// 🔎 Pesquisa clientes por parte do nome, CPF, telefone ou e-mail
-  Future<void> _pesquisarClientes(String query) async {
-    if (query.isEmpty) {
-      setState(() => resultadosPesquisa = []);
-      return;
-    }
-
-    final queryLower = query.toLowerCase();
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('clientes')
-        .get();
-
-    final resultados = snapshot.docs.where((doc) {
-      final data = doc.data();
-      final nome = (data['nome'] ?? '').toString().toLowerCase();
-      final cpf = (data['cpf'] ?? '').toString().toLowerCase();
-      final telefone = (data['telefone'] ?? '').toString().toLowerCase();
-      final email = (data['email'] ?? '').toString().toLowerCase();
-
-      return nome.contains(queryLower) ||
-          cpf.contains(queryLower) ||
-          telefone.contains(queryLower) ||
-          email.contains(queryLower);
-    }).map((doc) => {'id': doc.id, ...doc.data()}).toList();
-
-    setState(() {
-      resultadosPesquisa = resultados;
-    });
+  /// 🔎 Pesquisa clientes por parte do nome, CPF, telefone (com ou sem formatação) ou e-mail
+Future<void> _pesquisarClientes(String query) async {
+  if (query.isEmpty) {
+    setState(() => resultadosPesquisa = []);
+    return;
   }
+
+  final queryLower = query.toLowerCase().replaceAll(RegExp(r'[^0-9a-z@]'), '');
+
+  final snapshot = await FirebaseFirestore.instance.collection('clientes').get();
+
+  final resultados = snapshot.docs.where((doc) {
+    final data = doc.data();
+    final nome = (data['nome'] ?? '').toString().toLowerCase();
+    final cpf = (data['cpf'] ?? '').toString().replaceAll(RegExp(r'[^0-9a-z@]'), '').toLowerCase();
+    final telefone = (data['telefone'] ?? '').toString().replaceAll(RegExp(r'[^0-9a-z@]'), '').toLowerCase();
+    final email = (data['email'] ?? '').toString().toLowerCase();
+
+    return nome.contains(queryLower) ||
+        cpf.contains(queryLower) ||
+        telefone.contains(queryLower) ||
+        email.contains(queryLower);
+  }).map((doc) => {'id': doc.id, ...doc.data()}).toList();
+
+  setState(() {
+    resultadosPesquisa = resultados;
+  });
+}
+
 
   /// 📸 Lê o QR Code da nota fiscal
   Future<void> _lerQRCode() async {
