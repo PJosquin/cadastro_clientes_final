@@ -129,23 +129,43 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   }
 
   /// 🔗 Abre a nota fiscal salva via QR Code
-  Future<void> _abrirNotaFiscal() async {
-    if (qrCodeNotaFiscal == null || qrCodeNotaFiscal!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nenhum QR Code salvo.')),
-      );
-      return;
-    }
+Future<void> _abrirNotaFiscal() async {
+  if (qrCodeNotaFiscal == null || qrCodeNotaFiscal!.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Nenhum QR Code salvo.')),
+    );
+    return;
+  }
 
-    final url = qrCodeNotaFiscal!;
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
+  String url = qrCodeNotaFiscal!.trim();
+
+  // 🔹 Corrige links que não têm http ou https
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Endereço inválido: $url')),
+    );
+    return;
+  }
+
+  try {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível abrir a nota fiscal.')),
       );
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Erro ao abrir nota fiscal: $e')),
+    );
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
