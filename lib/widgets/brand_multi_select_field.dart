@@ -7,64 +7,87 @@ class BrandMultiSelectField extends FormField<List<String>> {
     List<String>? initialValue,
     FormFieldSetter<List<String>>? onSaved,
     FormFieldValidator<List<String>>? validator,
-    AutovalidateMode autovalidateMode = AutovalidateMode.disabled,
-    String? hintText,
   }) : super(
           key: key,
           initialValue: initialValue ?? const <String>[],
           onSaved: onSaved,
           validator: validator,
-          autovalidateMode: autovalidateMode,
           builder: (state) {
+            final context = state.context;
             final selected = List<String>.from(state.value ?? <String>[]);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () async {
-                    final result = await showModalBottomSheet<List<String>>(
-                      context: state.context,
-                      isScrollControlled: true,
-                      builder: (ctx) => _BrandPickerSheet(initial: selected),
-                    );
-                    if (result != null) state.didChange(result);
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Marcas',
-                      hintText: hintText ?? 'Selecione uma ou mais marcas',
-                      border: const OutlineInputBorder(),
-                      errorText: state.errorText,
-                    ),
-                    isEmpty: selected.isEmpty,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: -8,
-                      children: selected.isEmpty
-                          ? [
-                              Text(
-                                hintText ?? 'Nenhuma marca selecionada',
-                                style: TextStyle(
-                                  color: Theme.of(state.context).hintColor,
-                                ),
-                              ),
-                            ]
-                          : selected
-                              .map((m) => Chip(
-                                    label: Text(m),
-                                    onDeleted: () {
-                                      final newList =
-                                          List<String>.from(selected)..remove(m);
-                                      state.didChange(newList);
-                                    },
-                                  ))
-                              .toList(),
-                    ),
+                const Text(
+                  'Marcas',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 4),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () async {
+                    final result = await showModalBottomSheet<List<String>>(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (ctx) =>
+                          _BrandPickerSheet(initial: selected),
+                    );
+                    if (result != null) {
+                      state.didChange(result);
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: selected.isEmpty
+                        ? Text(
+                            'Selecione uma ou mais marcas',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 15,
+                            ),
+                          )
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: -4,
+                            children: selected
+                                .map((m) => Chip(
+                                      label: Text(m),
+                                      labelStyle: const TextStyle(
+                                          color: Colors.white),
+                                      backgroundColor: Colors.blue.shade400,
+                                      deleteIconColor: Colors.white,
+                                      onDeleted: () {
+                                        final newList =
+                                            List<String>.from(selected)
+                                              ..remove(m);
+                                        state.didChange(newList);
+                                      },
+                                    ))
+                                .toList(),
+                          ),
+                  ),
+                ),
+                if (state.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 4),
+                    child: Text(
+                      state.errorText ?? '',
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
               ],
             );
           },
@@ -95,8 +118,8 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.8,
-      builder: (ctx, ctrl) => Material(
-        color: Theme.of(context).colorScheme.surface,
+      builder: (ctx, scrollController) => Material(
+        color: Colors.white,
         child: SafeArea(
           child: Column(
             children: [
@@ -106,7 +129,7 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
                 child: TextField(
                   decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.search),
-                    hintText: 'Buscar marca…',
+                    hintText: 'Buscar marca...',
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (t) => setState(() => _query = t),
@@ -116,27 +139,33 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
               Expanded(
                 child: StreamBuilder<List<String>>(
                   stream: _repo.streamAll(),
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final all = (snap.data ?? <String>[])
-                        .where((m) =>
-                            m.toLowerCase().contains(_query.toLowerCase()))
-                        .toList();
-                    if (all.isEmpty) {
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(
-                          child: Text('Nenhuma marca encontrada'));
+                          child: CircularProgressIndicator());
                     }
+
+                    final todas = (snapshot.data ?? <String>[])
+                        .where((m) => m
+                            .toLowerCase()
+                            .contains(_query.toLowerCase()))
+                        .toList();
+
+                    if (todas.isEmpty) {
+                      return const Center(
+                          child: Text('Nenhuma marca encontrada.'));
+                    }
+
                     return ListView.builder(
-                      controller: ctrl,
-                      itemCount: all.length,
+                      controller: scrollController,
+                      itemCount: todas.length,
                       itemBuilder: (ctx, i) {
-                        final marca = all[i];
-                        final checked = _selected.contains(marca);
+                        final marca = todas[i];
+                        final selecionada = _selected.contains(marca);
                         return CheckboxListTile(
+                          value: selecionada,
                           title: Text(marca),
-                          value: checked,
                           onChanged: (v) {
                             setState(() {
                               if (v == true) {
@@ -153,7 +182,7 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Expanded(
@@ -167,14 +196,14 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
                     Expanded(
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.check),
-                        label: const Text('Aplicar'),
-                        onPressed: () => Navigator.pop(
-                            context, _selected.toSet().toList()),
+                        label: const Text('Confirmar'),
+                        onPressed: () =>
+                            Navigator.pop(context, _selected.toList()),
                       ),
                     ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
         ),
