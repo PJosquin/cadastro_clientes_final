@@ -3,16 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'firebase_options.dart'; // ✅ importante
 import 'cadastro_page.dart';
 import 'lista_clientes.dart';
 import 'filtro_page.dart';
 import 'pesquisa_aniversariantes_page.dart';
-import 'editar_clientes_page.dart'; // página de edição
+import 'editar_clientes_page.dart';
 import 'registro_venda_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  // ✅ inicializa o Firebase com as credenciais corretas do projeto
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   await initializeDateFormatting('pt_BR', null);
   runApp(const MyApp());
 }
@@ -24,22 +30,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cadastro de Clientes',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
-
-// 👇 habilita datas, textos e formatos do Material em pt-BR
-  localizationsDelegates: const [
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-  ],
-  supportedLocales: const [
-    Locale('pt', 'BR'),
-  ],
-  locale: const Locale('pt', 'BR'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('pt', 'BR')],
+      locale: const Locale('pt', 'BR'),
     );
   }
 }
@@ -128,17 +128,19 @@ class HomePage extends StatelessWidget {
                 },
                 child: const Text("Editar Clientes"),
               ),
-		const SizedBox(height: 20),
-		ElevatedButton(
-		 style: botaoPadrao,
- 		 onPressed: () {
-  		  Navigator.push(
-   		   context,
-   		   MaterialPageRoute(builder: (_) => const RegistroVendaPage()),
-  		  );
-		  },
-		  child: const Text("Registrar Venda"),
-		),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: botaoPadrao,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RegistroVendaPage(),
+                    ),
+                  );
+                },
+                child: const Text("Registrar Venda"),
+              ),
             ],
           ),
         ),

@@ -53,7 +53,11 @@ class _ListaClientesPageState extends State<ListaClientesPage> {
     .snapshots(),
 
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        print("🔥 snapshot.connectionState: ${snapshot.connectionState}");
+    print("📦 snapshot.hasData: ${snapshot.hasData}");
+    print("❌ snapshot.hasError: ${snapshot.hasError}");
+    if (snapshot.hasError) print("Erro Firestore: ${snapshot.error}");  
+if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
 
           final docs = snapshot.data!.docs;
 
