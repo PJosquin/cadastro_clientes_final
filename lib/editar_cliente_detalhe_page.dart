@@ -8,13 +8,13 @@ class EditarClienteDetalhePage extends StatefulWidget {
   final Map<String, dynamic> dadosCliente;
 
   const EditarClienteDetalhePage({
-    Key? key,
+    super.key,
     required this.clienteId,
     required this.dadosCliente,
-  }) : super(key: key);
+  });
 
   @override
-  State<EditarClienteDetalhePage> createState() => _EditarClienteDetalhePageState();
+  _EditarClienteDetalhePageState createState() => _EditarClienteDetalhePageState();
 }
 
 class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {

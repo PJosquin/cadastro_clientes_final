@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'editar_cliente_detalhe_page.dart'; // ✅ import necessário para abrir a tela de edição
 
 class ListaClientesPage extends StatefulWidget {
   @override
@@ -45,30 +46,33 @@ class _ListaClientesPageState extends State<ListaClientesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Lista de Clientes")),
+      appBar: AppBar(title: const Text("Lista de Clientes")),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-    .collection('clientes')
-    .orderBy('nome', descending: false) // 🔠 ordena de A → Z
-    .snapshots(),
-
+            .collection('clientes')
+            .orderBy('nome', descending: false)
+            .snapshots(),
         builder: (context, snapshot) {
-        print("🔥 snapshot.connectionState: ${snapshot.connectionState}");
-    print("📦 snapshot.hasData: ${snapshot.hasData}");
-    print("❌ snapshot.hasError: ${snapshot.hasError}");
-    if (snapshot.hasError) print("Erro Firestore: ${snapshot.error}");  
-if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+          print("🔥 snapshot.connectionState: ${snapshot.connectionState}");
+          print("📦 snapshot.hasData: ${snapshot.hasData}");
+          print("❌ snapshot.hasError: ${snapshot.hasError}");
+          if (snapshot.hasError) print("Erro Firestore: ${snapshot.error}");
+
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           final docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
-            return Center(child: Text("Nenhum cliente cadastrado."));
+            return const Center(child: Text("Nenhum cliente cadastrado."));
           }
 
           return ListView.builder(
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final data = docs[index].data() as Map<String, dynamic>;
+		data['id'] = docs[index].id;
 
               final cpf = _formatarCpf(data["cpf"]);
               final telefone = _formatarTelefone(data["telefone"]);
@@ -83,12 +87,33 @@ if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
                     children: [
                       if (cpf.isNotEmpty) Text("CPF: $cpf"),
                       if (telefone.isNotEmpty) Text("Telefone: $telefone"),
-                      if (aniversario.isNotEmpty) Text("Aniversário: $aniversario"),
-                      if (dataCadastro.isNotEmpty) Text("Cadastrado em: $dataCadastro"),
-                      if ((data["produto"] ?? "").isNotEmpty) Text("Produto: ${data["produto"]}"),
-                      if ((data["marca"] ?? "").isNotEmpty) Text("Marca: ${data["marca"]}"),
-                      if ((data["observacoes"] ?? "").isNotEmpty) Text("Obs: ${data["observacoes"]}"),
+                      if (aniversario.isNotEmpty)
+                        Text("Aniversário: $aniversario"),
+                      if (dataCadastro.isNotEmpty)
+                        Text("Cadastrado em: $dataCadastro"),
+                      if ((data["produto"] ?? "").isNotEmpty)
+                        Text("Produto: ${data["produto"]}"),
+                      if ((data["marca"] ?? "").isNotEmpty)
+                        Text("Marca: ${data["marca"]}"),
+                      if ((data["observacoes"] ?? "").isNotEmpty)
+                        Text("Obs: ${data["observacoes"]}"),
                     ],
+                  ),
+                  // ✅ Botão Editar adicionado — nenhuma outra modificação
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    tooltip: 'Editar Cliente',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+        builder: (_) => EditarClienteDetalhePage(
+          clienteId: data['id'],        // 🔑 ID agora está dentro do mapa
+          dadosCliente: data,           // 📦 Mapa completo
+                        ),
+                       ),
+		      );
+                    },
                   ),
                 ),
               );
