@@ -68,56 +68,80 @@ class _ListaClientesPageState extends State<ListaClientesPage> {
             return const Center(child: Text("Nenhum cliente cadastrado."));
           }
 
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-		data['id'] = docs[index].id;
+          return Stack(
+            children: [
+              ListView.builder(
+                padding: const EdgeInsets.only(bottom: 60), // espaço pro rodapé
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final data = docs[index].data() as Map<String, dynamic>;
+                  data['id'] = docs[index].id;
 
-              final cpf = _formatarCpf(data["cpf"]);
-              final telefone = _formatarTelefone(data["telefone"]);
-              final aniversario = _formatarData(data["aniversario"]);
-              final dataCadastro = _formatarData(data["dataCadastro"]);
+                  final cpf = _formatarCpf(data["cpf"]);
+                  final telefone = _formatarTelefone(data["telefone"]);
+                  final aniversario = _formatarData(data["aniversario"]);
+                  final dataCadastro = _formatarData(data["dataCadastro"]);
 
-              return Card(
-                child: ListTile(
-                  title: Text(data["nome"] ?? ""),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (cpf.isNotEmpty) Text("CPF: $cpf"),
-                      if (telefone.isNotEmpty) Text("Telefone: $telefone"),
-                      if (aniversario.isNotEmpty)
-                        Text("Aniversário: $aniversario"),
-                      if (dataCadastro.isNotEmpty)
-                        Text("Cadastrado em: $dataCadastro"),
-                      if ((data["produto"] ?? "").isNotEmpty)
-                        Text("Produto: ${data["produto"]}"),
-                      if ((data["marca"] ?? "").isNotEmpty)
-                        Text("Marca: ${data["marca"]}"),
-                      if ((data["observacoes"] ?? "").isNotEmpty)
-                        Text("Obs: ${data["observacoes"]}"),
-                    ],
-                  ),
-                  // ✅ Botão Editar adicionado — nenhuma outra modificação
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.blue),
-                    tooltip: 'Editar Cliente',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-        builder: (_) => EditarClienteDetalhePage(
-          clienteId: data['id'],        // 🔑 ID agora está dentro do mapa
-          dadosCliente: data,           // 📦 Mapa completo
-                        ),
-                       ),
-		      );
-                    },
+                  return Card(
+                    child: ListTile(
+                      title: Text(data["nome"] ?? ""),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (cpf.isNotEmpty) Text("CPF: $cpf"),
+                          if (telefone.isNotEmpty) Text("Telefone: $telefone"),
+                          if (aniversario.isNotEmpty)
+                            Text("Aniversário: $aniversario"),
+                          if (dataCadastro.isNotEmpty)
+                            Text("Cadastrado em: $dataCadastro"),
+                          if ((data["produto"] ?? "").isNotEmpty)
+                            Text("Produto: ${data["produto"]}"),
+                          if ((data["marca"] ?? "").isNotEmpty)
+                            Text("Marca: ${data["marca"]}"),
+                          if ((data["observacoes"] ?? "").isNotEmpty)
+                            Text("Obs: ${data["observacoes"]}"),
+                        ],
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        tooltip: 'Editar Cliente',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditarClienteDetalhePage(
+                                clienteId: data['id'],
+                                dadosCliente: data,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // Rodapé fixo com total de clientes
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  color: Colors.blue.shade50,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                  child: Text(
+                    "Total de clientes: ${docs.length}",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              );
-            },
+              ),
+            ],
           );
         },
       ),
