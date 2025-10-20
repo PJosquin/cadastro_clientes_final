@@ -107,9 +107,6 @@ class _CadastroPageState extends State<CadastroPage> {
               // Campo de múltiplas marcas
               BrandMultiSelectField(
                 initialValue: _marcasSelecionadas,
-                validator: (list) => (list == null || list.isEmpty)
-                    ? 'Selecione ao menos uma marca'
-                    : null,
                 onSaved: (list) =>
                     _marcasSelecionadas = List<String>.from(list ?? []),
               ),

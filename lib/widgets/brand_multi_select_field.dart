@@ -13,87 +13,68 @@ class BrandMultiSelectField extends FormField<List<String>> {
           onSaved: onSaved,
           validator: validator,
           builder: (state) {
-            final context = state.context;
             final selected = List<String>.from(state.value ?? <String>[]);
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Marcas',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () async {
-                    final result = await showModalBottomSheet<List<String>>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (ctx) =>
-                          _BrandPickerSheet(initial: selected),
-                    );
-                    if (result != null) {
-                      state.didChange(result);
-                    }
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: selected.isEmpty
-                        ? Text(
-                            'Selecione uma ou mais marcas',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 15,
-                            ),
-                          )
-                        : Wrap(
-                            spacing: 8,
-                            runSpacing: -4,
-                            children: selected
-                                .map((m) => Chip(
-                                      label: Text(m),
-                                      labelStyle: const TextStyle(
-                                          color: Colors.white),
-                                      backgroundColor: Colors.blue.shade400,
-                                      deleteIconColor: Colors.white,
-                                      onDeleted: () {
-                                        final newList =
-                                            List<String>.from(selected)
-                                              ..remove(m);
-                                        state.didChange(newList);
-                                      },
-                                    ))
-                                .toList(),
-                          ),
-                  ),
-                ),
-                if (state.hasError)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, left: 4),
-                    child: Text(
-                      state.errorText ?? '',
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 13,
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () async {
+                final result = await showModalBottomSheet<List<String>>(
+                  context: state.context,
+                  isScrollControlled: true,
+                  builder: (ctx) =>
+                      _BrandPickerSheet(initial: selected),
+                );
+                if (result != null) {
+                  state.didChange(result);
+                }
+              },
+              child: InputDecorator(
+                isEmpty: selected.isEmpty,
+                decoration: InputDecoration(
+  border: const OutlineInputBorder(),
+  errorText: state.errorText,
+  contentPadding:
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+),
+
+                child: selected.isEmpty
+                    ? Text(
+                        'Selecione uma ou mais marcas',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 16,
+                        ),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: -4,
+                        children: selected
+                            .map(
+                              (m) => Chip(
+                                label: Text(
+                                  m,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                                backgroundColor: Colors.blue.shade400,
+                                deleteIconColor: Colors.white,
+                                onDeleted: () {
+                                  final newList =
+                                      List<String>.from(selected)..remove(m);
+                                  state.didChange(newList);
+                                },
+                              ),
+                            )
+                            .toList(),
                       ),
-                    ),
-                  ),
-              ],
+              ),
             );
           },
         );
 }
 
+/// ------------------------------------------------------------
+///  Modal de seleção otimizado com cache local
+/// ------------------------------------------------------------
 class _BrandPickerSheet extends StatefulWidget {
   final List<String> initial;
   const _BrandPickerSheet({super.key, required this.initial});
@@ -105,16 +86,36 @@ class _BrandPickerSheet extends StatefulWidget {
 class _BrandPickerSheetState extends State<_BrandPickerSheet> {
   final _repo = MarcasRepository();
   late List<String> _selected;
+  List<String> _todasMarcas = [];
   String _query = '';
+  bool _carregando = true;
 
   @override
   void initState() {
     super.initState();
     _selected = List<String>.from(widget.initial);
+    _carregarMarcas();
+  }
+
+  Future<void> _carregarMarcas() async {
+    try {
+      final marcas = await _repo.getAll(); // usa cache local
+      setState(() {
+        _todasMarcas = marcas;
+        _carregando = false;
+      });
+    } catch (e) {
+      debugPrint('Erro ao carregar marcas: $e');
+      setState(() => _carregando = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final marcasFiltradas = _todasMarcas
+        .where((m) => m.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.8,
@@ -137,49 +138,32 @@ class _BrandPickerSheetState extends State<_BrandPickerSheet> {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: StreamBuilder<List<String>>(
-                  stream: _repo.streamAll(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(
-                          child: CircularProgressIndicator());
-                    }
-
-                    final todas = (snapshot.data ?? <String>[])
-                        .where((m) => m
-                            .toLowerCase()
-                            .contains(_query.toLowerCase()))
-                        .toList();
-
-                    if (todas.isEmpty) {
-                      return const Center(
-                          child: Text('Nenhuma marca encontrada.'));
-                    }
-
-                    return ListView.builder(
-                      controller: scrollController,
-                      itemCount: todas.length,
-                      itemBuilder: (ctx, i) {
-                        final marca = todas[i];
-                        final selecionada = _selected.contains(marca);
-                        return CheckboxListTile(
-                          value: selecionada,
-                          title: Text(marca),
-                          onChanged: (v) {
-                            setState(() {
-                              if (v == true) {
-                                _selected.add(marca);
-                              } else {
-                                _selected.remove(marca);
-                              }
-                            });
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
+                child: _carregando
+                    ? const Center(child: CircularProgressIndicator())
+                    : marcasFiltradas.isEmpty
+                        ? const Center(
+                            child: Text('Nenhuma marca encontrada.'))
+                        : ListView.builder(
+                            controller: scrollController,
+                            itemCount: marcasFiltradas.length,
+                            itemBuilder: (ctx, i) {
+                              final marca = marcasFiltradas[i];
+                              final selecionada = _selected.contains(marca);
+                              return CheckboxListTile(
+                                value: selecionada,
+                                title: Text(marca),
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selected.add(marca);
+                                    } else {
+                                      _selected.remove(marca);
+                                    }
+                                  });
+                                },
+                              );
+                            },
+                          ),
               ),
               Padding(
                 padding: const EdgeInsets.all(16),
