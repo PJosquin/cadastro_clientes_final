@@ -100,8 +100,18 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
                 int totalPecas = 0;
                 for (var doc in vendas) {
                   final data = doc.data() as Map<String, dynamic>;
-                  totalValor += (data['valor'] ?? 0).toDouble();
-                  totalPecas += ((data['numero_pecas'] ?? 0) as num).toInt();
+
+                  // ✅ Conversão segura de valor e peças
+                  final valor = (data['valor'] is num)
+                      ? (data['valor'] as num).toDouble()
+                      : double.tryParse(data['valor'].toString()) ?? 0.0;
+
+                  final pecas = (data['numero_pecas'] is num)
+                      ? (data['numero_pecas'] as num).toInt()
+                      : int.tryParse(data['numero_pecas'].toString()) ?? 0;
+
+                  totalValor += valor;
+                  totalPecas += pecas;
                 }
 
                 return SingleChildScrollView(
@@ -160,11 +170,21 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
                         itemBuilder: (context, index) {
                           final data =
                               vendas[index].data() as Map<String, dynamic>;
-                          final valor = (data['valor'] ?? 0).toDouble();
-                          final pecas = (data['numero_pecas'] ?? 0).toInt();
+
+                          // ✅ Conversão segura dentro do item
+                          final valor = (data['valor'] is num)
+                              ? (data['valor'] as num).toDouble()
+                              : double.tryParse(data['valor'].toString()) ?? 0.0;
+
+                          final pecas = (data['numero_pecas'] is num)
+                              ? (data['numero_pecas'] as num).toInt()
+                              : int.tryParse(data['numero_pecas'].toString()) ??
+                                  0;
+
                           final nota = data['numero_nota'] ?? '';
                           final obs = data['observacoes'] ?? '';
-                          final qrcode = (data['qrcode'] ?? '').toString().trim();
+                          final qrcode =
+                              (data['qrcode'] ?? '').toString().trim();
                           final dataVenda =
                               (data['data'] as Timestamp).toDate();
                           final dataFormatada =
@@ -238,3 +258,4 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
     );
   }
 }
+
