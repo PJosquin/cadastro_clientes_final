@@ -15,7 +15,7 @@ dependencies:
   # 🔹 Pacotes 100% compatíveis com Flutter 3.19.6
   firebase_core: ^4.2.0
   cloud_firestore: ^6.0.3
-  flutter_masked_text2: 0.9.1
+  flutter_masked_text2: ^0.9.1
   mask_text_input_formatter: ^2.9.0
   intl: ^0.20.2
   font_awesome_flutter: ^10.11.0
