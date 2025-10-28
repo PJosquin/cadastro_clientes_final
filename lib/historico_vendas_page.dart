@@ -46,8 +46,8 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
               child: const Icon(Icons.arrow_upward, color: Colors.white),
               onPressed: () {
                 _scrollController.animateTo(
-                  0,
-                  duration: const Duration(milliseconds: 400),
+                  _scrollController.position.minScrollExtent,
+                  duration: const Duration(milliseconds: 500),
                   curve: Curves.easeOut,
                 );
               },
@@ -75,7 +75,6 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
 
           final vendas = snapshot.data!.docs;
 
-          // 🔹 Cálculo dos totais
           double totalValor = 0;
           int totalPecas = 0;
           for (var doc in vendas) {
@@ -95,7 +94,6 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
             itemCount: vendas.length + 2,
             itemBuilder: (context, index) {
               if (index == 0) {
-                // Cabeçalho com nome
                 return Container(
                   width: double.infinity,
                   color: Colors.blue.shade100,
@@ -112,7 +110,6 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
                   ),
                 );
               } else if (index == 1) {
-                // Faixa azul com totais
                 return Container(
                   width: double.infinity,
                   color: Colors.blue.shade700,
@@ -153,9 +150,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
                 );
               }
 
-              // Itens das vendas
-              final data =
-                  vendas[index - 2].data() as Map<String, dynamic>;
+              final data = vendas[index - 2].data() as Map<String, dynamic>;
               final valor = (data['valor'] is num)
                   ? (data['valor'] as num).toDouble()
                   : double.tryParse(data['valor'].toString()) ?? 0.0;
