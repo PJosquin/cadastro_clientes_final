@@ -14,88 +14,89 @@ class CadastroPage extends StatefulWidget {
 class _CadastroPageState extends State<CadastroPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controladores
   final cpfController = MaskedTextController(mask: '000.000.000-00');
-  final telefoneController = MaskedTextController(mask: '(00) 00000-0000');
-  final aniversarioController = MaskedTextController(mask: '00/00/0000');
   final nomeController = TextEditingController();
   final emailController = TextEditingController();
+  final telefoneController = MaskedTextController(mask: '(00) 00000-0000');
+  final aniversarioController = MaskedTextController(mask: '00/00/0000');
   final produtoController = TextEditingController();
   final observacoesController = TextEditingController();
 
-  String? _marcaSelecionada;
-  bool _clienteSalvo = false;
-  String? _telefoneSalvo;
+  String? _marcaSelecionada; // dropdown (opcional)
 
-  final TextEditingController _mensagemController = TextEditingController(
-    text: 'Olá! Queremos agradecer de coração pela sua compra. '
-        'Ficamos muito felizes em ter você como cliente!\n\n'
-        'Este é o nosso contato oficial. Anote aí! '
-        'Estamos à disposição para qualquer dúvida ou suporte que precisar.',
-  );
+  @override
+  void dispose() {
+    cpfController.dispose();
+    nomeController.dispose();
+    emailController.dispose();
+    telefoneController.dispose();
+    aniversarioController.dispose();
+    produtoController.dispose();
+    observacoesController.dispose();
+    super.dispose();
+  }
+
+  // 🔠 Capitaliza cada palavra
+  String _capitalizarNome(String nome) {
+    final partes = nome
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .map((p) => p[0].toUpperCase() + (p.length > 1 ? p.substring(1).toLowerCase() : ''))
+        .toList();
+    return partes.join(' ');
+  }
 
   Future<void> _salvarCliente() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final nome = nomeController.text.trim();
+    final cpf = cpfController.text.trim();
+    final nomeCru = nomeController.text.trim();
+
+    // ✅ NOVO: capitaliza e atualiza o campo visível
+    final nome = _capitalizarNome(nomeCru);
+    nomeController.text = nome;
+
     final email = emailController.text.trim();
     final telefone = telefoneController.text.trim();
-    final cpf = cpfController.text.trim();
     final aniversario = aniversarioController.text.trim();
     final produto = produtoController.text.trim();
     final observacoes = observacoesController.text.trim();
-    final marca = _marcaSelecionada ?? '';
+    final marca = _marcaSelecionada ?? ''; // opcional
 
-    await FirebaseFirestore.instance.collection('clientes').add({
-      'nome': nome,
-      'email': email,
-      'telefone': telefone,
-      'cpf': cpf,
-      'aniversario': aniversario,
-      'produto': produto,
-      'observacoes': observacoes,
-      'marcas': [marca],
-      'dataCadastro': DateTime.now(),
-    });
+    try {
+      await FirebaseFirestore.instance.collection('clientes').add({
+        'cpf': cpf,
+        'nome': nome, // ✅ salvo capitalizado
+        'email': email,
+        'telefone': telefone,
+        'aniversario': aniversario,
+        'produto': produto,
+        'marca': marca,
+        'observacoes': observacoes,
+        'dataCadastro': Timestamp.now(),
+      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ Cliente salvo com sucesso!'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    setState(() {
-      _clienteSalvo = true;
-      _telefoneSalvo = telefone;
-    });
-
-    _formKey.currentState!.reset();
-    nomeController.clear();
-    emailController.clear();
-    telefoneController.updateText('');
-    cpfController.updateText('');
-    aniversarioController.updateText('');
-    produtoController.clear();
-    observacoesController.clear();
-    _marcaSelecionada = null;
-  }
-
-  Future<void> _abrirWhatsApp() async {
-    if (_telefoneSalvo == null || _telefoneSalvo!.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Telefone não informado')),
+        const SnackBar(content: Text('Cliente salvo com sucesso!')),
       );
-      return;
-    }
 
-    final numero = _telefoneSalvo!.replaceAll(RegExp(r'[^0-9]'), '');
-    final mensagem = Uri.encodeComponent(_mensagemController.text);
-    final url = 'https://wa.me/55$numero?text=$mensagem';
-    final uri = Uri.parse(url);
-
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      // Limpa os campos
+      _formKey.currentState!.reset();
+      cpfController.updateText('');
+      telefoneController.updateText('');
+      aniversarioController.updateText('');
+      nomeController.clear();
+      emailController.clear();
+      produtoController.clear();
+      observacoesController.clear();
+      setState(() => _marcaSelecionada = null);
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o WhatsApp')),
+        SnackBar(content: Text('Erro ao salvar: $e')),
       );
     }
   }
@@ -103,118 +104,124 @@ class _CadastroPageState extends State<CadastroPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cadastro de Cliente'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Cadastro de Cliente')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
+              // CPF (opcional)
               TextFormField(
                 controller: cpfController,
-                decoration: const InputDecoration(labelText: 'CPF (opcional)'),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'CPF'),
               ),
+
+              // Nome (obrigatório)
               TextFormField(
                 controller: nomeController,
                 decoration: const InputDecoration(labelText: 'Nome'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Informe o nome' : null,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Informe o nome';
+                  }
+                  return null;
+                },
               ),
+
+              // E-mail
               TextFormField(
                 controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'E-mail'),
               ),
+
+              // Telefone (opcional)
               TextFormField(
                 controller: telefoneController,
+                keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: 'Telefone'),
-                validator: (v) => v == null || v.isEmpty
-                    ? 'Informe o telefone do cliente'
-                    : null,
               ),
+
+              // Data de aniversário
               TextFormField(
                 controller: aniversarioController,
-                decoration:
-                    const InputDecoration(labelText: 'Data de Aniversário'),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Data de Aniversário'),
               ),
+
+              // Produto desejado
               TextFormField(
                 controller: produtoController,
-                decoration: const InputDecoration(labelText: 'Produto'),
+                decoration: const InputDecoration(labelText: 'Produto desejado'),
               ),
-              const SizedBox(height: 10),
-              FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance
+
+              const SizedBox(height: 8),
+
+              // 🔽 Dropdown de Marcas (opcional, carrega do Firestore)
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
                     .collection('marcas')
                     .orderBy('nome')
-                    .get(),
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: LinearProgressIndicator(),
+                    );
                   }
-                  final marcas = snapshot.data!.docs
-                      .map((doc) => doc['nome'].toString())
-                      .toList();
+                  final itens = snapshot.hasData
+                      ? snapshot.data!.docs
+                          .map((d) => (d.data() as Map<String, dynamic>)['nome']?.toString() ?? '')
+                          .where((s) => s.isNotEmpty)
+                          .toList()
+                      : <String>[];
 
                   return DropdownButtonFormField<String>(
-                    value: _marcaSelecionada,
+                    value: (_marcaSelecionada != null && itens.contains(_marcaSelecionada))
+                        ? _marcaSelecionada
+                        : null,
+                    items: itens
+                        .map((m) => DropdownMenuItem<String>(
+                              value: m,
+                              child: Text(m),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _marcaSelecionada = v),
                     decoration: const InputDecoration(
-                      labelText: 'Marca (opcional)',
+                      labelText: 'Marca',
                       border: OutlineInputBorder(),
                     ),
-                    items: marcas
-                        .map((m) =>
-                            DropdownMenuItem(value: m, child: Text(m)))
-                        .toList(),
-                    onChanged: (v) {
-                      setState(() {
-                        _marcaSelecionada = v;
-                      });
-                    },
+                    isExpanded: true,
                   );
                 },
               ),
-              const SizedBox(height: 10),
+
+              const SizedBox(height: 12),
+
+              // Observações
               TextFormField(
                 controller: observacoesController,
                 decoration: const InputDecoration(labelText: 'Observações'),
                 maxLines: 3,
               ),
+
               const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _salvarCliente,
-                icon: const Icon(Icons.save),
-                label: const Text('Salvar Cliente'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
+
+              // Botão Salvar
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _salvarCliente,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Salvar'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              if (_clienteSalvo)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _mensagemController,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'Mensagem para enviar no WhatsApp',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: _abrirWhatsApp,
-                      icon: const Icon(Icons.chat, color: Colors.white),
-                      label: const Text('Enviar pelo WhatsApp'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        minimumSize: const Size.fromHeight(50),
-                      ),
-                    ),
-                  ],
-                ),
             ],
           ),
         ),
