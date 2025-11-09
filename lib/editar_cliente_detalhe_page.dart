@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
-import 'package:cadastro_clientes/historico_vendas_page.dart';
+import 'historico_vendas_page.dart'; // ✅ IMPORTADO para abrir o histórico
 
 class EditarClienteDetalhePage extends StatefulWidget {
   final String clienteId;
@@ -28,22 +28,46 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
   late final TextEditingController produtoController;
   late final TextEditingController observacoesController;
 
-  String? _marcaSelecionada;
+  List<String> _todasMarcas = [];
+  List<String> _marcasSelecionadas = [];
 
   @override
   void initState() {
     super.initState();
+
     final d = widget.dadosCliente;
 
-    cpfController = MaskedTextController(mask: '000.000.000-00', text: (d['cpf'] ?? '').toString());
+    cpfController = MaskedTextController(
+      mask: '000.000.000-00',
+      text: (d['cpf'] ?? '').toString(),
+    );
     nomeController = TextEditingController(text: (d['nome'] ?? '').toString());
     emailController = TextEditingController(text: (d['email'] ?? '').toString());
-    telefoneController = MaskedTextController(mask: '(00) 00000-0000', text: (d['telefone'] ?? '').toString());
-    aniversarioController = MaskedTextController(mask: '00/00/0000', text: (d['aniversario'] ?? '').toString());
+    telefoneController = MaskedTextController(
+      mask: '(00) 00000-0000',
+      text: (d['telefone'] ?? '').toString(),
+    );
+    aniversarioController = MaskedTextController(
+      mask: '00/00/0000',
+      text: (d['aniversario'] ?? '').toString(),
+    );
     produtoController = TextEditingController(text: (d['produto'] ?? '').toString());
     observacoesController = TextEditingController(text: (d['observacoes'] ?? '').toString());
 
-    _marcaSelecionada = (d['marca'] ?? '').toString().isNotEmpty ? (d['marca'] as String) : null;
+    // marcas selecionadas (novo array) com compat ao campo antigo 'marca'
+    if (d['marcas'] is List) {
+      _marcasSelecionadas = (d['marcas'] as List)
+          .map((e) => e?.toString() ?? '')
+          .where((s) => s.trim().isNotEmpty)
+          .cast<String>()
+          .toList();
+    } else if ((d['marca'] ?? '').toString().trim().isNotEmpty) {
+      _marcasSelecionadas = [(d['marca'] as String).trim()];
+    } else {
+      _marcasSelecionadas = [];
+    }
+
+    _carregarMarcas();
   }
 
   @override
@@ -58,6 +82,176 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
     super.dispose();
   }
 
+  Future<void> _carregarMarcas() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('marcas')
+          .orderBy('nome')
+          .get();
+      final lista = snap.docs
+          .map((d) => (d.data()['nome']?.toString() ?? '').trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      setState(() {
+        _todasMarcas = lista;
+      });
+    } catch (_) {/* silencioso */}
+  }
+
+  void _abrirSeletorMarcas() {
+    final selecionadasTemp = Set<String>.from(_marcasSelecionadas);
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16, right: 16, top: 8,
+              bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Selecione uma ou mais marcas',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 320,
+                  child: _todasMarcas.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          itemCount: _todasMarcas.length,
+                          itemBuilder: (c, i) {
+                            final m = _todasMarcas[i];
+                            final marcado = selecionadasTemp.contains(m);
+                            return CheckboxListTile(
+                              value: marcado,
+                              title: Text(m),
+                              onChanged: (v) {
+                                if (v == true) {
+                                  selecionadasTemp.add(m);
+                                } else {
+                                  selecionadasTemp.remove(m);
+                                }
+                                (ctx as Element).markNeedsBuild();
+                              },
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _marcasSelecionadas = selecionadasTemp.toList()..sort();
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Aplicar'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _campoMultiMarcas() {
+    final hasSel = _marcasSelecionadas.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Marcas (opcional)', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: _abrirSeletorMarcas,
+          child: InputDecorator(
+            isFocused: false,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Selecione uma ou mais marcas',
+            ),
+            child: hasSel
+                ? Wrap(
+                    spacing: 6,
+                    runSpacing: -6,
+                    children: _marcasSelecionadas
+                        .map((m) => Chip(
+                              label: Text(m),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onDeleted: () {
+                                setState(() {
+                                  _marcasSelecionadas.remove(m);
+                                });
+                              },
+                            ))
+                        .toList(),
+                  )
+                : const Text('Selecione uma ou mais marcas'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _salvar() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final nomeCru = nomeController.text.trim();
+    final nome = _capitalizarNome(nomeCru);
+    nomeController.text = nome;
+
+    final data = <String, dynamic>{
+      'cpf': cpfController.text.trim(),
+      'nome': nome,
+      'email': emailController.text.trim(),
+      'telefone': telefoneController.text.trim(),
+      'aniversario': aniversarioController.text.trim(),
+      'produto': produtoController.text.trim(),
+      'observacoes': observacoesController.text.trim(),
+      // compat
+      'marca': _marcasSelecionadas.isNotEmpty ? _marcasSelecionadas.first : '',
+      'marcas': _marcasSelecionadas,
+    };
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('clientes')
+          .doc(widget.clienteId)
+          .update(data);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente atualizado com sucesso!')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar: $e')),
+      );
+    }
+  }
+
   String _capitalizarNome(String nome) {
     final partes = nome
         .trim()
@@ -66,38 +260,6 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
         .map((p) => p[0].toUpperCase() + (p.length > 1 ? p.substring(1).toLowerCase() : ''))
         .toList();
     return partes.join(' ');
-  }
-
-  Future<void> _salvarAlteracoes() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final nomeCru = nomeController.text.trim();
-    final nome = _capitalizarNome(nomeCru); // ✅ capitaliza ao editar
-
-    try {
-      await FirebaseFirestore.instance.collection('clientes').doc(widget.clienteId).update({
-        'cpf': cpfController.text.trim(),
-        'nome': nome, // ✅ salvo capitalizado
-        'email': emailController.text.trim(),
-        'telefone': telefoneController.text.trim(),
-        'aniversario': aniversarioController.text.trim(),
-        'produto': produtoController.text.trim(),
-        'marca': _marcaSelecionada ?? '',
-        'observacoes': observacoesController.text.trim(),
-        // 'dataCadastro' não é alterado aqui
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Alterações salvas!')),
-      );
-      Navigator.pop(context); // volta para a lista
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao salvar: $e')),
-      );
-    }
   }
 
   @override
@@ -110,14 +272,14 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
           key: _formKey,
           child: ListView(
             children: [
-              // CPF (opcional)
+              // CPF
               TextFormField(
                 controller: cpfController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'CPF'),
               ),
 
-              // Nome (obrigatório) — capitalizado no salvar
+              // Nome
               TextFormField(
                 controller: nomeController,
                 decoration: const InputDecoration(labelText: 'Nome'),
@@ -157,39 +319,9 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
               ),
 
               const SizedBox(height: 8),
-              // Dropdown de marcas (opcional)
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('marcas')
-                    .orderBy('nome')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  final itens = snapshot.hasData
-                      ? snapshot.data!.docs
-                          .map((d) => (d.data() as Map<String, dynamic>)['nome']?.toString() ?? '')
-                          .where((s) => s.isNotEmpty)
-                          .toList()
-                      : <String>[];
 
-                  return DropdownButtonFormField<String>(
-                    value: (_marcaSelecionada != null && itens.contains(_marcaSelecionada))
-                        ? _marcaSelecionada
-                        : null,
-                    items: itens
-                        .map((m) => DropdownMenuItem<String>(
-                              value: m,
-                              child: Text(m),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => _marcaSelecionada = v),
-                    decoration: const InputDecoration(
-                      labelText: 'Marca',
-                      border: OutlineInputBorder(),
-                    ),
-                    isExpanded: true,
-                  );
-                },
-              ),
+              // Multi-marcas
+              _campoMultiMarcas(),
 
               const SizedBox(height: 12),
 
@@ -202,12 +334,38 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
 
               const SizedBox(height: 20),
 
+              // 🔵 Botão Histórico de Vendas (novo, secundário)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.history),
+                  label: const Text('Histórico de Vendas'),
+                  onPressed: () {
+                    final nomeAtual = (nomeController.text.trim().isNotEmpty)
+                        ? nomeController.text.trim()
+                        : (widget.dadosCliente['nome'] ?? '').toString();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HistoricoVendasPage(
+                          clienteId: widget.clienteId,
+                          nomeCliente: _capitalizarNome(nomeAtual),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Salvar
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _salvarAlteracoes,
                   icon: const Icon(Icons.save),
                   label: const Text('Salvar alterações'),
+                  onPressed: _salvar,
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),
