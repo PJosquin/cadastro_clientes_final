@@ -24,9 +24,9 @@ class _CadastroPageState extends State<CadastroPage> {
   final produtoController = TextEditingController();
   final observacoesController = TextEditingController();
 
-  // Marca (dropdown opcional)
-  String? _marcaSelecionada;
+  // Marcas
   List<String> _todasMarcas = [];
+  List<String> _marcasSelecionadas = [];
 
   @override
   void initState() {
@@ -70,8 +70,8 @@ class _CadastroPageState extends State<CadastroPage> {
   }
 
   void _mostrarSheetWhatsapp({
-    required String telefoneBr, // ex: (21) 99999-0000
-    required String nome,       // nome do cliente
+    required String telefoneBr,
+    required String nome,
   }) {
     final telDigits = _somenteDigitos(telefoneBr);
     if (telDigits.isEmpty) {
@@ -80,7 +80,6 @@ class _CadastroPageState extends State<CadastroPage> {
       );
       return;
     }
-    // E.164 simples para BR: 55 + DDD + número
     final telefoneE164 = telDigits.length >= 10 ? '55$telDigits' : telDigits;
 
     final controllerMensagem = TextEditingController(
@@ -151,9 +150,7 @@ class _CadastroPageState extends State<CadastroPage> {
       setState(() {
         _todasMarcas = lista;
       });
-    } catch (_) {
-      // Se falhar, mantém lista vazia e segue sem travar a tela
-    }
+    } catch (_) {/* segue sem travar */}
   }
 
   Future<void> _salvarCliente() async {
@@ -161,15 +158,17 @@ class _CadastroPageState extends State<CadastroPage> {
 
     final cpf = cpfController.text.trim();
     final nomeCru = nomeController.text.trim();
-    final nome = _capitalizarNome(nomeCru); // capitaliza na gravação
-    nomeController.text = nome; // reflete na UI
+    final nome = _capitalizarNome(nomeCru);
+    nomeController.text = nome;
 
     final email = emailController.text.trim();
     final telefone = telefoneController.text.trim();
     final aniversario = aniversarioController.text.trim();
     final produto = produtoController.text.trim();
     final observacoes = observacoesController.text.trim();
-    final marca = (_marcaSelecionada ?? '').trim();
+
+    // Compat: 'marca' = primeira marca (ou vazio); 'marcas' = array completo
+    final marcaCompat = _marcasSelecionadas.isNotEmpty ? _marcasSelecionadas.first : '';
 
     try {
       await FirebaseFirestore.instance.collection('clientes').add({
@@ -179,7 +178,8 @@ class _CadastroPageState extends State<CadastroPage> {
         'telefone': telefone,
         'aniversario': aniversario,
         'produto': produto,
-        'marca': marca, // compat com telas antigas
+        'marca': marcaCompat,            // <= compat com telas antigas
+        'marcas': _marcasSelecionadas,   // <= novo campo multi
         'observacoes': observacoes,
         'dataCadastro': Timestamp.now(),
       });
@@ -192,13 +192,12 @@ class _CadastroPageState extends State<CadastroPage> {
         ),
       );
 
-      // 👉 Mostrar opção de WhatsApp ANTES de limpar os campos
       _mostrarSheetWhatsapp(
         telefoneBr: telefone,
         nome: nome,
       );
 
-      // Limpa tudo após acionar a folha de WhatsApp
+      // Limpar
       _formKey.currentState!.reset();
       cpfController.updateText('');
       telefoneController.updateText('');
@@ -208,7 +207,7 @@ class _CadastroPageState extends State<CadastroPage> {
       produtoController.clear();
       observacoesController.clear();
       setState(() {
-        _marcaSelecionada = null;
+        _marcasSelecionadas = [];
       });
     } catch (e) {
       if (!mounted) return;
@@ -216,6 +215,123 @@ class _CadastroPageState extends State<CadastroPage> {
         SnackBar(content: Text('Erro ao salvar: $e')),
       );
     }
+  }
+
+  // ---- UI multi-marcas (sem mexer no restante do layout) ----
+  void _abrirSeletorMarcas() {
+    final selecionadasTemp = Set<String>.from(_marcasSelecionadas);
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16, right: 16, top: 8,
+              bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Selecione uma ou mais marcas',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 320,
+                  child: _todasMarcas.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                          itemCount: _todasMarcas.length,
+                          itemBuilder: (c, i) {
+                            final m = _todasMarcas[i];
+                            final marcado = selecionadasTemp.contains(m);
+                            return CheckboxListTile(
+                              value: marcado,
+                              title: Text(m),
+                              onChanged: (v) {
+                                if (v == true) {
+                                  selecionadasTemp.add(m);
+                                } else {
+                                  selecionadasTemp.remove(m);
+                                }
+                                // força rebuild do bottom-sheet
+                                (ctx as Element).markNeedsBuild();
+                              },
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _marcasSelecionadas = selecionadasTemp.toList()..sort();
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Aplicar'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _campoMultiMarcas() {
+    final hasSel = _marcasSelecionadas.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Marcas (opcional)', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: _abrirSeletorMarcas,
+          child: InputDecorator(
+            isFocused: false,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Selecione uma ou mais marcas',
+            ),
+            child: hasSel
+                ? Wrap(
+                    spacing: 6,
+                    runSpacing: -6,
+                    children: _marcasSelecionadas
+                        .map((m) => Chip(
+                              label: Text(m),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onDeleted: () {
+                                setState(() {
+                                  _marcasSelecionadas.remove(m);
+                                });
+                              },
+                            ))
+                        .toList(),
+                  )
+                : const Text('Selecione uma ou mais marcas'),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -276,27 +392,8 @@ class _CadastroPageState extends State<CadastroPage> {
 
               const SizedBox(height: 8),
 
-              // Marca (dropdown opcional, sem obrigatoriedade)
-              InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Marca (opcional)',
-                  border: OutlineInputBorder(),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: _marcaSelecionada,
-                    hint: const Text('Selecione a marca (opcional)'),
-                    items: _todasMarcas
-                        .map((m) => DropdownMenuItem<String>(
-                              value: m,
-                              child: Text(m),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => _marcaSelecionada = v),
-                  ),
-                ),
-              ),
+              // >>> Multi-marcas (opcional) — substitui o dropdown, mantendo compat na gravação
+              _campoMultiMarcas(),
 
               const SizedBox(height: 12),
 
