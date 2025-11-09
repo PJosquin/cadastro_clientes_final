@@ -1,3 +1,4 @@
+// lib/editar_cliente_detalhe_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
@@ -57,10 +58,11 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
     // marcas selecionadas (novo array) com compat ao campo antigo 'marca'
     if (d['marcas'] is List) {
       _marcasSelecionadas = (d['marcas'] as List)
-          .map((e) => e?.toString() ?? '')
-          .where((s) => s.trim().isNotEmpty)
-          .cast<String>()
-          .toList();
+          .map((e) => (e ?? '').toString().trim())
+          .where((s) => s.isNotEmpty)
+          .toSet() // 🔧 sem duplicatas
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())); // 🔧 ordenado
     } else if ((d['marca'] ?? '').toString().trim().isNotEmpty) {
       _marcasSelecionadas = [(d['marca'] as String).trim()];
     } else {
@@ -88,12 +90,17 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
           .collection('marcas')
           .orderBy('nome')
           .get();
+
       final lista = snap.docs
           .map((d) => (d.data()['nome']?.toString() ?? '').trim())
           .where((s) => s.isNotEmpty)
           .toList();
+
       setState(() {
-        _todasMarcas = lista;
+        // 🔧 Inclui também as marcas já salvas no cliente (mesmo que não existam mais na coleção)
+        final conjunto = <String>{...lista, ..._marcasSelecionadas};
+        _todasMarcas = conjunto.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       });
     } catch (_) {/* silencioso */}
   }
@@ -158,7 +165,12 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
                       child: ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            _marcasSelecionadas = selecionadasTemp.toList()..sort();
+                            _marcasSelecionadas = selecionadasTemp
+                                .map((e) => e.trim())
+                                .where((e) => e.isNotEmpty)
+                                .toSet()
+                                .toList()
+                              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
                           });
                           Navigator.pop(ctx);
                         },
@@ -220,6 +232,14 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
     final nome = _capitalizarNome(nomeCru);
     nomeController.text = nome;
 
+    // 🔧 Normaliza lista antes de salvar
+    final marcasLimpas = _marcasSelecionadas
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     final data = <String, dynamic>{
       'cpf': cpfController.text.trim(),
       'nome': nome,
@@ -228,9 +248,9 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
       'aniversario': aniversarioController.text.trim(),
       'produto': produtoController.text.trim(),
       'observacoes': observacoesController.text.trim(),
-      // compat
-      'marca': _marcasSelecionadas.isNotEmpty ? _marcasSelecionadas.first : '',
-      'marcas': _marcasSelecionadas,
+      // compat legado + multi
+      'marca': marcasLimpas.isNotEmpty ? marcasLimpas.first : '',
+      'marcas': marcasLimpas,
     };
 
     try {
@@ -334,7 +354,7 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
 
               const SizedBox(height: 20),
 
-              // 🔵 Botão Histórico de Vendas (novo, secundário)
+              // 🔵 Botão Histórico de Vendas (secundário)
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
