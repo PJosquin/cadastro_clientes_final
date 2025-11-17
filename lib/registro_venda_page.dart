@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'services/cashback_service.dart'; // 🔹 NOVO
 
 class RegistroVendaPage extends StatefulWidget {
   const RegistroVendaPage({Key? key}) : super(key: key);
@@ -25,6 +26,33 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   final TextEditingController _qrcodeController = TextEditingController();
 
   bool _salvando = false;
+
+  // 🔹 Cashback
+  double? _percentualCashback; // lido do Firestore (config/cashback/percentual)
+  bool _carregandoCashback = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarPercentualCashback();
+  }
+
+  Future<void> _carregarPercentualCashback() async {
+    try {
+      final percentual = await CashbackService.instance.getPercentualCashback();
+      if (!mounted) return;
+      setState(() {
+        _percentualCashback = percentual;
+        _carregandoCashback = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _percentualCashback = 0.05; // fallback 5%
+        _carregandoCashback = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -81,6 +109,11 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
           0.0;
       final pecas = int.tryParse(_pecasController.text.trim()) ?? 0;
 
+      // 🔹 Calcula cashback com base no percentual da config
+      final double percentual = _percentualCashback ?? 0.05; // fallback 5%
+      final double cashbackGerado = valor * percentual;
+
+      // 🔹 Salva a venda com campos de cashback
       await FirebaseFirestore.instance.collection('vendas').add({
         'clienteId': _clienteSelecionadoId,
         'clienteNome': _clienteSelecionadoNome,
@@ -90,7 +123,18 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
         'numero_nota': _notaController.text.trim(), // compatível com histórico
         'observacoes': _observacoesController.text.trim(),
         'qrcode': _qrcodeController.text.trim(), // preenchido pelo scanner
+        'cashback_gerado': cashbackGerado,
+        'percentual_cashback': percentual,
       });
+
+      // 🔹 Atualiza saldo de cashback do cliente
+      await FirebaseFirestore.instance
+          .collection('clientes')
+          .doc(_clienteSelecionadoId)
+          .set({
+        'cashback_acumulado': FieldValue.increment(cashbackGerado),
+        'cashback_ultima_atualizacao': Timestamp.now(),
+      }, SetOptions(merge: true));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,9 +242,8 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                     ),
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) => (v == null || v.isEmpty)
-                        ? 'Informe o valor'
-                        : null,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Informe o valor' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
