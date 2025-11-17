@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'services/cashback_service.dart'; // 🔹 NOVO
+import 'services/cashback_service.dart'; // 🔹 serviço de configuração de cashback
 
 class RegistroVendaPage extends StatefulWidget {
   const RegistroVendaPage({Key? key}) : super(key: key);
@@ -25,9 +25,13 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   final TextEditingController _observacoesController = TextEditingController();
   final TextEditingController _qrcodeController = TextEditingController();
 
+  // 🔹 Campo para usar cashback
+  final TextEditingController _usarCashbackController = TextEditingController();
+  double _cashbackDisponivel = 0.0;
+
   bool _salvando = false;
 
-  // 🔹 Cashback
+  // 🔹 Cashback (config)
   double? _percentualCashback; // lido do Firestore (config/cashback/percentual)
   bool _carregandoCashback = true;
 
@@ -62,6 +66,7 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
     _notaController.dispose();
     _observacoesController.dispose();
     _qrcodeController.dispose();
+    _usarCashbackController.dispose();
     super.dispose();
   }
 
@@ -92,10 +97,52 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
     }).toList();
   }
 
+  Future<void> _selecionarCliente(String id, String nome) async {
+    setState(() {
+      _clienteSelecionadoId = id;
+      _clienteSelecionadoNome = nome;
+      _buscaController.text = nome;
+      _cashbackDisponivel = 0.0;
+      _usarCashbackController.clear();
+    });
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('clientes')
+          .doc(id)
+          .get();
+
+      if (!doc.exists) return;
+      final data = doc.data();
+      if (data == null) return;
+
+      double cb = 0.0;
+      final campo = data['cashback_acumulado'];
+      if (campo is num) {
+        cb = campo.toDouble();
+      } else if (campo is String) {
+        cb = double.tryParse(campo.replaceAll(',', '.')) ?? 0.0;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _cashbackDisponivel = cb;
+        // Se quiser sempre usar tudo por padrão:
+        if (_cashbackDisponivel > 0) {
+          _usarCashbackController.text =
+              _cashbackDisponivel.toStringAsFixed(2);
+        }
+      });
+    } catch (_) {
+      // se der erro, apenas mantém cashbackDisponivel = 0.0
+    }
+  }
+
   Future<void> _salvarVenda() async {
     if (_clienteSelecionadoId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Selecione um cliente antes de registrar.")),
+        const SnackBar(
+            content: Text("Selecione um cliente antes de registrar.")),
       );
       return;
     }
@@ -109,16 +156,45 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
           0.0;
       final pecas = int.tryParse(_pecasController.text.trim()) ?? 0;
 
-      // 🔹 Calcula cashback com base no percentual da config
+      // 🔹 Valor de cashback a usar (opcional)
+      double usarCashback = 0.0;
+      if (_usarCashbackController.text.trim().isNotEmpty) {
+        usarCashback = double.tryParse(_usarCashbackController.text
+                    .replaceAll('.', '')
+                    .replaceAll(',', '.')) ??
+                0.0;
+      }
+
+      if (usarCashback < 0) usarCashback = 0.0;
+
+      // Não deixar usar mais do que o disponível (com pequena tolerância)
+      if (usarCashback > _cashbackDisponivel + 0.01) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Você tentou usar R\$ ${usarCashback.toStringAsFixed(2)}, mas o disponível é R\$ ${_cashbackDisponivel.toStringAsFixed(2)}.'),
+          ),
+        );
+        setState(() => _salvando = false);
+        return;
+      }
+
+      // 🔹 Calcula cashback GERADO por esta venda, com base no percentual
       final double percentual = _percentualCashback ?? 0.05; // fallback 5%
       final double cashbackGerado = valor * percentual;
 
-      // 🔹 Salva a venda com campos de cashback
+      // 🔹 Valor líquido (o que o cliente paga após desconto de cashback)
+      final double valorLiquido = valor - usarCashback;
+
+      // 🔹 Salva a venda com campos de cashback e desconto
       await FirebaseFirestore.instance.collection('vendas').add({
         'clienteId': _clienteSelecionadoId,
         'clienteNome': _clienteSelecionadoNome,
         'data': Timestamp.now(),
-        'valor': valor, // double
+        'valor': valor, // valor bruto
+        'valor_liquido': valorLiquido, // após desconto de cashback
+        'desconto_cashback': usarCashback,
         'numero_pecas': pecas, // compatível com histórico
         'numero_nota': _notaController.text.trim(), // compatível com histórico
         'observacoes': _observacoesController.text.trim(),
@@ -127,14 +203,27 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
         'percentual_cashback': percentual,
       });
 
-      // 🔹 Atualiza saldo de cashback do cliente
+      // 🔹 Atualiza saldo de cashback do cliente:
+      // saldo novo = saldo antigo - usado + gerado
+      final double deltaCashback = cashbackGerado - usarCashback;
+
       await FirebaseFirestore.instance
           .collection('clientes')
           .doc(_clienteSelecionadoId)
           .set({
-        'cashback_acumulado': FieldValue.increment(cashbackGerado),
+        'cashback_acumulado': FieldValue.increment(deltaCashback),
         'cashback_ultima_atualizacao': Timestamp.now(),
       }, SetOptions(merge: true));
+
+      // Atualiza o valor em memória também (para uma próxima venda na mesma tela)
+      setState(() {
+        _cashbackDisponivel =
+            (_cashbackDisponivel - usarCashback) + cashbackGerado;
+        if (_cashbackDisponivel < 0.009) {
+          _cashbackDisponivel = 0.0; // evita -0.00 por arredondamento
+        }
+        _usarCashbackController.clear();
+      });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,11 +282,7 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                       title: Text(nome),
                       subtitle: Text("CPF: $cpf\nTelefone: $telefone"),
                       onTap: () {
-                        setState(() {
-                          _clienteSelecionadoId = doc.id;
-                          _clienteSelecionadoNome = nome;
-                          _buscaController.text = nome;
-                        });
+                        _selecionarCliente(doc.id, nome);
                       },
                     );
                   }).toList(),
@@ -213,7 +298,20 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                 child: ListTile(
                   leading: const Icon(Icons.person, color: Colors.blue),
                   title: Text(_clienteSelecionadoNome ?? ''),
-                  subtitle: const Text("Cliente selecionado"),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Cliente selecionado"),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Cashback disponível: R\$ ${_cashbackDisponivel.toStringAsFixed(2)}",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () {
@@ -221,6 +319,8 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                         _clienteSelecionadoId = null;
                         _clienteSelecionadoNome = null;
                         _buscaController.clear();
+                        _cashbackDisponivel = 0.0;
+                        _usarCashbackController.clear();
                       });
                     },
                   ),
@@ -287,14 +387,17 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                      icon: const Icon(Icons.qr_code_scanner,
+                          color: Colors.white),
                       label: const Text(
                         'Escanear Nota Fiscal (QR Code)',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
+                        style:
+                            TextStyle(fontSize: 16, color: Colors.white),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () async {
                         final resultado = await Navigator.push(
@@ -304,10 +407,25 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                           ),
                         );
                         if (resultado != null && resultado is String) {
-                          setState(() => _qrcodeController.text = resultado);
+                          setState(
+                              () => _qrcodeController.text = resultado);
                         }
                       },
                     ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 🔹 Campo para usar cashback
+                  TextFormField(
+                    controller: _usarCashbackController,
+                    decoration: InputDecoration(
+                      labelText:
+                          'Usar cashback (R\$) — disponível: ${_cashbackDisponivel.toStringAsFixed(2)}',
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                   ),
 
                   const SizedBox(height: 20),
@@ -319,11 +437,13 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
                       icon: const Icon(Icons.save, color: Colors.white),
                       label: const Text(
                         'Salvar Venda',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
+                        style:
+                            TextStyle(fontSize: 18, color: Colors.white),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: _salvando ? null : _salvarVenda,
                     ),
