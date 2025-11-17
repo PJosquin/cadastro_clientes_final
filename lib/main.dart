@@ -10,6 +10,7 @@ import 'filtro_page.dart';
 import 'pesquisa_aniversariantes_page.dart';
 import 'editar_clientes_page.dart';
 import 'registro_venda_page.dart';
+import 'cashback_page.dart'; // 🔹 NOVO IMPORT
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -81,6 +82,7 @@ class HomePage extends StatelessWidget {
                 child: const Text("Cadastrar Cliente"),
               ),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 style: botaoPadrao,
                 onPressed: () {
@@ -92,6 +94,7 @@ class HomePage extends StatelessWidget {
                 child: const Text("Lista de Clientes"),
               ),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 style: botaoPadrao,
                 onPressed: () {
@@ -103,6 +106,7 @@ class HomePage extends StatelessWidget {
                 child: const Text("Pesquisar com Filtros"),
               ),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 style: botaoPadrao,
                 onPressed: () {
@@ -116,6 +120,7 @@ class HomePage extends StatelessWidget {
                 child: const Text("Pesquisar Aniversariantes"),
               ),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 style: botaoPadrao,
                 onPressed: () {
@@ -129,6 +134,7 @@ class HomePage extends StatelessWidget {
                 child: const Text("Editar Clientes"),
               ),
               const SizedBox(height: 20),
+
               ElevatedButton(
                 style: botaoPadrao,
                 onPressed: () {
@@ -140,6 +146,21 @@ class HomePage extends StatelessWidget {
                   );
                 },
                 child: const Text("Registrar Venda"),
+              ),
+              const SizedBox(height: 20),
+
+              // 🔵 NOVO BOTÃO DE CASHBACK
+              ElevatedButton(
+                style: botaoPadrao,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CashbackPage(),
+                    ),
+                  );
+                },
+                child: const Text("Cashback dos Clientes"),
               ),
             ],
           ),
