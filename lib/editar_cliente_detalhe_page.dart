@@ -91,7 +91,7 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
     }
 
     _carregarMarcas();
-    _carregarDadosDoFirestore(); // 🔴 agora recarrega TODOS os campos do banco
+    _carregarDadosDoFirestore(); // 🔴 recarrega e trata expiração
   }
 
   @override
@@ -126,7 +126,7 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
     } catch (_) {/* silencioso */}
   }
 
-  // 🔴 Sempre pega o documento COMPLETO direto do Firestore
+  // 🔴 Sempre pega o documento COMPLETO direto do Firestore e trata expiração de cashback
   Future<void> _carregarDadosDoFirestore() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -138,18 +138,47 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
       final data = doc.data();
       if (data == null) return;
 
-      // Cashback
-      final cb = data['cashback_acumulado'];
-      double novoCashback;
-      if (cb is num) {
-        novoCashback = cb.toDouble();
-      } else if (cb is String) {
-        novoCashback = double.tryParse(cb.replaceAll(',', '.')) ?? 0.0;
-      } else {
-        novoCashback = 0.0;
+      // Cashback atual
+      double cb = 0.0;
+      final campoCb = data['cashback_acumulado'];
+      if (campoCb is num) {
+        cb = campoCb.toDouble();
+      } else if (campoCb is String) {
+        cb = double.tryParse(campoCb.replaceAll(',', '.')) ?? 0.0;
       }
 
-      // Marcas
+      // Data da última atualização
+      Timestamp? tsUlt;
+      final rawUlt = data['cashback_ultima_atualizacao'];
+      if (rawUlt is Timestamp) {
+        tsUlt = rawUlt;
+      }
+
+      final agora = DateTime.now();
+      final limite = agora.subtract(const Duration(days: 180)); // ~6 meses
+
+      bool expirou = false;
+
+      if (tsUlt != null && cb > 0) {
+        final dtUlt = tsUlt.toDate();
+        if (dtUlt.isBefore(limite)) {
+          // 🔴 Cashback vencido: zera no banco e registra expiração
+          await FirebaseFirestore.instance
+              .collection('clientes')
+              .doc(widget.clienteId)
+              .set({
+            'cashback_acumulado': 0.0,
+            'cashback_ultima_atualizacao': Timestamp.now(),
+            'cashback_expirado_valor': cb,
+            'cashback_expirado_ultima_vez': Timestamp.now(),
+          }, SetOptions(merge: true));
+
+          cb = 0.0;
+          expirou = true;
+        }
+      }
+
+      // Marcas (a partir dos dados mais recentes)
       List<String> novasMarcasSel;
       if (data['marcas'] is List) {
         novasMarcasSel = (data['marcas'] as List)
@@ -166,9 +195,8 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
 
       if (!mounted) return;
       setState(() {
-        _cashbackAcumulado = novoCashback;
+        _cashbackAcumulado = cb;
 
-        // Atualiza TODOS os campos a partir do Firestore
         cpfController.text = (data['cpf'] ?? '').toString();
         nomeController.text = (data['nome'] ?? '').toString();
         emailController.text = (data['email'] ?? '').toString();
@@ -182,6 +210,16 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
 
         _marcasSelecionadas = novasMarcasSel;
       });
+
+      if (expirou && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'O cashback desse cliente venceu (mais de 6 meses sem uso). Saldo zerado.',
+            ),
+          ),
+        );
+      }
     } catch (_) {
       // se der erro, mantém o valor atual
     }
@@ -553,11 +591,12 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
         .trim()
         .split(RegExp(r'\s+'))
         .where((p) => p.isNotEmpty)
-        .map((p) =>
-            p[0].toUpperCase() +
-            (p.length > 1
-                ? p.substring(1).toLowerCase()
-                : ''))
+        .map(
+          (p) => p[0].toUpperCase() +
+              (p.length > 1
+                  ? p.substring(1).toLowerCase()
+                  : ''),
+        )
         .toList();
     return partes.join(' ');
   }
@@ -651,26 +690,30 @@ class _EditarClienteDetalhePageState extends State<EditarClienteDetalhePage> {
               const SizedBox(height: 20),
 
               // 🔹 Card de Cashback acumulado (somente visualização)
-Card(
-  elevation: 2,
-  child: Padding(
-    padding: const EdgeInsets.all(16.0),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Cashback acumulado',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'R\$ ${_cashbackAcumulado.toStringAsFixed(2)}',
-          style: const TextStyle(fontSize: 22),
-        ),
-      ],
-    ),
-  ),
-),
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cashback acumulado',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'R\$ ${_cashbackAcumulado.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 20),
 

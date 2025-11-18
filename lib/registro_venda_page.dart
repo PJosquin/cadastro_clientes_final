@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'services/cashback_service.dart'; // 🔹 serviço de configuração de cashback
+import 'services/cashback_service.dart'; // serviço de configuração de cashback
 
 class RegistroVendaPage extends StatefulWidget {
   const RegistroVendaPage({Key? key}) : super(key: key);
@@ -25,13 +25,14 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
   final TextEditingController _observacoesController = TextEditingController();
   final TextEditingController _qrcodeController = TextEditingController();
 
-  // 🔹 Campo para usar cashback
-  final TextEditingController _usarCashbackController = TextEditingController();
+  // Campo para usar cashback
+  final TextEditingController _usarCashbackController =
+      TextEditingController();
   double _cashbackDisponivel = 0.0;
 
   bool _salvando = false;
 
-  // 🔹 Cashback (config)
+  // Cashback (config)
   double? _percentualCashback; // lido do Firestore (config/cashback/percentual)
   bool _carregandoCashback = true;
 
@@ -97,6 +98,7 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
     }).toList();
   }
 
+  // 🔹 Seleciona cliente e trata expiração de cashback (> 6 meses ~ 180 dias)
   Future<void> _selecionarCliente(String id, String nome) async {
     setState(() {
       _clienteSelecionadoId = id;
@@ -116,23 +118,66 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
       final data = doc.data();
       if (data == null) return;
 
+      // Lê cashback acumulado
       double cb = 0.0;
-      final campo = data['cashback_acumulado'];
-      if (campo is num) {
-        cb = campo.toDouble();
-      } else if (campo is String) {
-        cb = double.tryParse(campo.replaceAll(',', '.')) ?? 0.0;
+      final campoCb = data['cashback_acumulado'];
+      if (campoCb is num) {
+        cb = campoCb.toDouble();
+      } else if (campoCb is String) {
+        cb = double.tryParse(campoCb.replaceAll(',', '.')) ?? 0.0;
+      }
+
+      // Lê data da última atualização
+      Timestamp? tsUlt;
+      final rawUlt = data['cashback_ultima_atualizacao'];
+      if (rawUlt is Timestamp) {
+        tsUlt = rawUlt;
+      }
+
+      final agora = DateTime.now();
+      final limite = agora.subtract(const Duration(days: 180)); // ~6 meses
+
+      bool expirou = false;
+
+      if (tsUlt != null && cb > 0) {
+        final dtUlt = tsUlt.toDate();
+        if (dtUlt.isBefore(limite)) {
+          // 🔴 Cashback vencido: zera no banco e registra expiração
+          await FirebaseFirestore.instance
+              .collection('clientes')
+              .doc(id)
+              .set({
+            'cashback_acumulado': 0.0,
+            'cashback_ultima_atualizacao': Timestamp.now(),
+            'cashback_expirado_valor': cb,
+            'cashback_expirado_ultima_vez': Timestamp.now(),
+          }, SetOptions(merge: true));
+
+          cb = 0.0;
+          expirou = true;
+        }
       }
 
       if (!mounted) return;
       setState(() {
         _cashbackDisponivel = cb;
-        // Se quiser sempre usar tudo por padrão:
+        _usarCashbackController.clear();
         if (_cashbackDisponivel > 0) {
+          // Se quiser sugerir usar tudo por padrão:
           _usarCashbackController.text =
               _cashbackDisponivel.toStringAsFixed(2);
         }
       });
+
+      if (expirou && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'O cashback desse cliente venceu (mais de 6 meses sem uso). Saldo zerado.',
+            ),
+          ),
+        );
+      }
     } catch (_) {
       // se der erro, apenas mantém cashbackDisponivel = 0.0
     }
@@ -156,13 +201,15 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
           0.0;
       final pecas = int.tryParse(_pecasController.text.trim()) ?? 0;
 
-      // 🔹 Valor de cashback a usar (opcional)
+      // Valor de cashback a usar (opcional)
       double usarCashback = 0.0;
       if (_usarCashbackController.text.trim().isNotEmpty) {
-        usarCashback = double.tryParse(_usarCashbackController.text
-                    .replaceAll('.', '')
-                    .replaceAll(',', '.')) ??
-                0.0;
+        usarCashback = double.tryParse(
+                  _usarCashbackController.text
+                      .replaceAll('.', '')
+                      .replaceAll(',', '.'),
+                ) ??
+            0.0;
       }
 
       if (usarCashback < 0) usarCashback = 0.0;
@@ -173,21 +220,22 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Você tentou usar R\$ ${usarCashback.toStringAsFixed(2)}, mas o disponível é R\$ ${_cashbackDisponivel.toStringAsFixed(2)}.'),
+              'Você tentou usar R\$ ${usarCashback.toStringAsFixed(2)}, mas o disponível é R\$ ${_cashbackDisponivel.toStringAsFixed(2)}.',
+            ),
           ),
         );
         setState(() => _salvando = false);
         return;
       }
 
-      // 🔹 Calcula cashback GERADO por esta venda, com base no percentual
+      // Calcula cashback GERADO por esta venda, com base no percentual
       final double percentual = _percentualCashback ?? 0.05; // fallback 5%
       final double cashbackGerado = valor * percentual;
 
-      // 🔹 Valor líquido (o que o cliente paga após desconto de cashback)
+      // Valor líquido (o que o cliente paga após desconto de cashback)
       final double valorLiquido = valor - usarCashback;
 
-      // 🔹 Salva a venda com campos de cashback e desconto
+      // Salva a venda com campos de cashback e desconto
       await FirebaseFirestore.instance.collection('vendas').add({
         'clienteId': _clienteSelecionadoId,
         'clienteNome': _clienteSelecionadoNome,
@@ -203,7 +251,7 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
         'percentual_cashback': percentual,
       });
 
-      // 🔹 Atualiza saldo de cashback do cliente:
+      // Atualiza saldo de cashback do cliente:
       // saldo novo = saldo antigo - usado + gerado
       final double deltaCashback = cashbackGerado - usarCashback;
 
@@ -416,7 +464,7 @@ class _RegistroVendaPageState extends State<RegistroVendaPage> {
 
                   const SizedBox(height: 20),
 
-                  // 🔹 Campo para usar cashback
+                  // Campo para usar cashback
                   TextFormField(
                     controller: _usarCashbackController,
                     decoration: InputDecoration(
